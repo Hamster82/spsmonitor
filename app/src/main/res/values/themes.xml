@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Die eigentliche Gestaltung kommt aus Compose; hier nur der Startrahmen. -->
+    <style name="Theme.SpsMonitor" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
