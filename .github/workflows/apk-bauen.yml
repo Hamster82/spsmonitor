@@ -1,8 +1,10 @@
 # Baut die APK bei GitHub – auf dem eigenen Rechner wird dafür weder
 # Android Studio noch ein SDK gebraucht.
 #
-# Nach dem Hochladen: Reiter "Actions" -> "APK bauen" -> "Run workflow".
-# Die fertige APK liegt danach unter "Artifacts" und zusätzlich im Branch "apk".
+# Die fertige Datei liegt danach an drei Stellen:
+#   1. als Release unter "Releases" (fester Link, siehe README)
+#   2. im Branch "apk"
+#   3. unter "Artifacts" beim jeweiligen Lauf
 
 name: APK bauen
 
@@ -37,17 +39,31 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: APK bauen
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: APK bauen (verkleinerte Release-Fassung)
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: APK umbenennen
-        run: cp app/build/outputs/apk/debug/app-debug.apk SpsMonitor.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk SpsMonitor.apk
+          ls -lh SpsMonitor.apk
 
       - name: APK zum Herunterladen bereitstellen
         uses: actions/upload-artifact@v5
         with:
           name: SpsMonitor-APK
           path: SpsMonitor.apk
+
+      - name: Release veröffentlichen (fester Download-Link)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete aktuell --yes --cleanup-tag 2>/dev/null || true
+          gh release create aktuell SpsMonitor.apk \
+            --title "SPS Monitor – neueste Version" \
+            --notes "Automatisch gebaut aus ${GITHUB_SHA::7}.
+
+          Zum Installieren die Datei auf dem Handy antippen. Android fragt
+          einmal nach der Erlaubnis für Apps aus dieser Quelle."
 
       - name: APK im Branch "apk" ablegen
         run: |

@@ -32,7 +32,14 @@ android {
             signingConfig = signingConfigs.getByName("fest")
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // Verkleinert die APK deutlich: ungenutzter Code und ungenutzte
+            // Ressourcen fliegen raus. Macht den Download spürbar kleiner.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("fest")
         }
     }
