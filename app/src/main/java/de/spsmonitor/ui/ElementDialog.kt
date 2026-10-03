@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -112,24 +114,47 @@ fun ElementDialog(
         }
     }
 
+    // Höhe selbst ausrechnen statt auf fillMaxSize zu bauen: ein Dialogfenster
+    // meldet je nach Gerät eine unbegrenzte Höhe, dann wüchse der Inhaltsbereich
+    // ins Unendliche und schöbe die Fußzeile aus dem Bild.
+    val konfiguration = LocalConfiguration.current
+    val dialogHoehe = (konfiguration.screenHeightDp * 0.94f).dp
+
     Dialog(
         onDismissRequest = onAbbrechen,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(Modifier.fillMaxSize()) {
+        Surface(Modifier.fillMaxWidth().height(dialogHoehe)) {
             Column(Modifier.fillMaxSize().imePadding()) {
 
-                // ---------- Kopfzeile ----------
+                // ---------- Kopfzeile mit Bestätigung ----------
+                // Die Knöpfe stehen bewusst auch hier oben: die Kopfzeile wird
+                // als erstes angeordnet und kann nie verdrängt werden.
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        titel,
-                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                        Text(
+                            titel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = { onSpeichern(gebaut()) },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Übernehmen") }
+                            OutlinedButton(
+                                onClick = onAbbrechen,
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Abbrechen") }
+                        }
+                    }
                 }
 
                 // ---------- Scrollbarer Inhalt ----------
@@ -352,15 +377,21 @@ fun ElementDialog(
                     }
                 }
 
-                // ---------- Fußzeile ----------
+                // ---------- Fußzeile (zweite Gelegenheit, dieselbe Wirkung) ----------
                 Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onAbbrechen) { Text("Abbrechen") }
-                        Button(onClick = { onSpeichern(gebaut()) }) { Text("Übernehmen") }
+                        OutlinedButton(
+                            onClick = onAbbrechen,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Abbrechen") }
+                        Button(
+                            onClick = { onSpeichern(gebaut()) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Übernehmen") }
                     }
                 }
             }
