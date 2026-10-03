@@ -8,6 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -157,6 +158,13 @@ private fun Verbindungsleiste(vm: MainViewModel) {
                     enabled = vm.verbunden
                 )
                 Text("alle 2 s", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.weight(1f))
+                // Damit immer erkennbar ist, welcher Stand installiert ist
+                Text(
+                    "v" + BuildConfig.VERSION_NAME,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                )
             }
         }
     }
