@@ -48,13 +48,15 @@ class Repo(private val kontext: Context) {
     // ---------- Austausch über die Dateiauswahl ----------
 
     /** Schreibt das Projekt in eine vom Nutzer gewählte Datei. Null bei Erfolg. */
-    fun inDateiSchreiben(ziel: Uri, konfiguration: Konfiguration): String? = try {
-        kontext.contentResolver.openOutputStream(ziel, "wt")?.use { strom ->
-            strom.write(konfiguration.toJson().toString(2).toByteArray(Charsets.UTF_8))
-        } ?: return "Die Datei konnte nicht beschrieben werden."
-        null
-    } catch (fehler: Exception) {
-        fehler.message ?: "Speichern fehlgeschlagen"
+    fun inDateiSchreiben(ziel: Uri, konfiguration: Konfiguration): String? {
+        return try {
+            val strom = kontext.contentResolver.openOutputStream(ziel, "wt")
+                ?: return "Die Datei konnte nicht beschrieben werden."
+            strom.use { it.write(konfiguration.toJson().toString(2).toByteArray(Charsets.UTF_8)) }
+            null
+        } catch (fehler: Exception) {
+            fehler.message ?: "Speichern fehlgeschlagen"
+        }
     }
 
     /** Liest ein Projekt aus einer gewählten Datei. Null, wenn es nicht klappt. */
