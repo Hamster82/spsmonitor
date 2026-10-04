@@ -47,8 +47,13 @@ import de.spsmonitor.data.S7Client
 import de.spsmonitor.data.UebersichtElement
 import java.util.Locale
 
-/** Breite der gedachten Leinwand; alle Elementkoordinaten beziehen sich darauf. */
+/**
+ * Gedachte Seitengröße; alle Elementkoordinaten beziehen sich darauf.
+ * Gleiche Maße wie in der HTML-Oberfläche, damit eine Seite überall
+ * gleich aussieht und immer vollständig ins Bild passt.
+ */
 private const val LEINWAND_BREITE = 1000f
+private const val LEINWAND_HOEHE = 700f
 
 @Composable
 fun UebersichtScreen(vm: MainViewModel) {
@@ -135,13 +140,19 @@ fun UebersichtScreen(vm: MainViewModel) {
                 .background(if (bearbeiten) Color(0xFFEFF3F8) else Color.White)
                 .border(1.dp, Color(0xFFBFC7D1))
         ) {
-            val skala = this.maxWidth.value / LEINWAND_BREITE      // dp je Leinwandeinheit
+            // So skalieren, dass die ganze Seite hineinpasst (wie ein Bedienpanel)
+            val skala = minOf(
+                this.maxWidth.value / LEINWAND_BREITE,
+                this.maxHeight.value / LEINWAND_HOEHE
+            )
+            val randLinks = ((this.maxWidth.value - LEINWAND_BREITE * skala) / 2f).coerceAtLeast(0f)
+            val randOben = ((this.maxHeight.value - LEINWAND_HOEHE * skala) / 2f).coerceAtLeast(0f)
             val dichte = LocalDensity.current
 
             seite?.elemente?.forEach { el ->
                 Box(
                     Modifier
-                        .offset((el.x * skala).dp, (el.y * skala).dp)
+                        .offset((randLinks + el.x * skala).dp, (randOben + el.y * skala).dp)
                         .size((el.breite * skala).dp, (el.hoehe * skala).dp)
                         .then(
                             if (bearbeiten) Modifier

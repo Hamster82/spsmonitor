@@ -1,5 +1,8 @@
 package de.spsmonitor.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,17 +45,35 @@ fun TagsScreen(vm: MainViewModel) {
 
     Column(Modifier.fillMaxWidth()) {
 
+        // Dateiauswahl von Android für den Projektaustausch
+        val speichernStarter = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/json")
+        ) { ziel -> ziel?.let { vm.projektInDatei(it) } }
+
+        val ladenStarter = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { quelle -> quelle?.let { vm.projektAusDatei(it) } }
+
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(onClick = { vm.tagHinzufuegen() }) { Text("Tag hinzufügen") }
             OutlinedButton(onClick = { vm.alleLesen() }, enabled = vm.verbunden) { Text("Jetzt lesen") }
+            OutlinedButton(onClick = { speichernStarter.launch("projekt.json") }) {
+                Text("Projekt speichern")
+            }
+            OutlinedButton(onClick = { ladenStarter.launch(arrayOf("application/json", "*/*")) }) {
+                Text("Projekt laden")
+            }
         }
 
         Text(
-            "DB-Nummer und Offset stammen aus dem Step7-/TIA-Projekt (z. B. DBD4 → Offset 4, DBX8.0 → Offset 8 / Bit 0).",
+            "DB-Nummer und Offset stammen aus dem Step7-/TIA-Projekt (z. B. DBD4 → Offset 4, " +
+                "DBX8.0 → Offset 8 / Bit 0). Ein gespeichertes Projekt lässt sich unverändert in " +
+                "der HTML-Oberfläche öffnen.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
         )

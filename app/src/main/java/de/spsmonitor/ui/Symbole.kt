@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import de.spsmonitor.data.S7Client
@@ -325,13 +326,19 @@ fun DrawScope.zeichneSymbol(el: UebersichtElement, wert: String?) {
         "Gasspeicher" -> {
             val fuellung = anteil(wert, el)
             kasten(14f, 72f, 72f, 10f, Symbole.METALL, 2f)                // Sockel
-            drawArc(                                                       // Hülle
-                Symbole.WEISS, 180f, 180f, false,
-                p(14f, 30f), s(72f, 84f)
-            )
-            if (fuellung > 0f) {
-                val winkel = 180f * fuellung
-                drawArc(Symbole.GAS, 180f + (180f - winkel) / 2f, winkel, true, p(14f, 30f), s(72f, 84f))
+            drawArc(Symbole.WEISS, 180f, 180f, true, p(14f, 30f), s(72f, 84f))   // Hülle
+            if (fuellung > 0f) {                                           // Füllstand steigt von unten
+                val kuppel = Path().apply {
+                    addArc(
+                        androidx.compose.ui.geometry.Rect(p(14f, 30f), s(72f, 84f)),
+                        180f, 180f
+                    )
+                    close()
+                }
+                clipPath(kuppel) {
+                    val h = 42f * fuellung
+                    drawRect(Symbole.GAS, p(14f, 72f - h), s(72f, h))
+                }
             }
             drawArc(Symbole.RAND, 180f, 180f, false, p(14f, 30f), s(72f, 84f), style = Stroke(dicke(2.5f)))
             linie(14f, 72f, 86f, 72f, Symbole.RAND, 2.5f)
@@ -394,9 +401,9 @@ fun DrawScope.zeichneSymbol(el: UebersichtElement, wert: String?) {
                 }
                 text("Soll ${String.format(Locale.GERMANY, "%.1f", el.sollwert)}", 72f, 60f, 10f, Symbole.RAND)
                 text("± ${String.format(Locale.GERMANY, "%.1f", halbeHyst)}", 72f, 72f, 10f, Symbole.RAND)
-                kasten(52f, 78f, 44f, 14f, lage.second.copy(alpha = .25f), 3f)
-                kastenRand(52f, 78f, 44f, 14f, lage.second, 1.5f, 3f)
-                text(lage.first, 74f, 88f, 9.5f, Symbole.RAND, true)
+                kasten(50f, 78f, 48f, 14f, lage.second.copy(alpha = .25f), 3f)
+                kastenRand(50f, 78f, 48f, 14f, lage.second, 1.5f, 3f)
+                text(lage.first, 74f, 88f, 8.5f, Symbole.RAND, true)
             }
         }
 

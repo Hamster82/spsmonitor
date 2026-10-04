@@ -12,8 +12,8 @@ android {
         applicationId = "de.spsmonitor"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.3"
+        versionCode = 4
+        versionName = "1.4"
     }
 
     // Fester Schlüssel, damit neue Versionen über die alte installiert werden

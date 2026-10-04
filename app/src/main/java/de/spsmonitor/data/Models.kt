@@ -17,12 +17,13 @@ data class PlcTag(
         .put("bit", bit).put("typ", typ)
 
     companion object {
+        /** Nimmt auch Dateien aus früheren Fassungen an (große Anfangsbuchstaben). */
         fun fromJson(o: JSONObject) = PlcTag(
-            name = o.optString("name", ""),
-            db = o.optInt("db", 1),
-            offset = o.optInt("offset", 0),
-            bit = o.optInt("bit", 0),
-            typ = o.optString("typ", "Real")
+            name = o.optString("name", o.optString("Name", "")),
+            db = o.optInt("db", o.optInt("Db", 1)),
+            offset = o.optInt("offset", o.optInt("Offset", 0)),
+            bit = o.optInt("bit", o.optInt("Bit", 0)),
+            typ = o.optString("typ", o.optString("Typ", "Real"))
         )
     }
 }
@@ -74,8 +75,8 @@ data class UebersichtElement(
 
     companion object {
         fun fromJson(o: JSONObject) = UebersichtElement(
-            id = o.optString("id", UUID.randomUUID().toString()),
-            typ = o.optString("typ", ElementTyp.SYMBOL),
+            id = o.optString("id", o.optString("Id", UUID.randomUUID().toString())),
+            typ = o.optString("typ", o.optString("Typ", ElementTyp.SYMBOL)),
             x = o.optDouble("x", 40.0).toFloat(),
             y = o.optDouble("y", 40.0).toFloat(),
             breite = o.optDouble("breite", 110.0).toFloat(),
@@ -110,11 +111,11 @@ data class UebersichtSeite(
 
     companion object {
         fun fromJson(o: JSONObject): UebersichtSeite {
-            val liste = o.optJSONArray("elemente") ?: JSONArray()
+            val liste = o.optJSONArray("elemente") ?: o.optJSONArray("Elemente") ?: JSONArray()
             val elemente = (0 until liste.length()).mapNotNull { i ->
                 liste.optJSONObject(i)?.let { UebersichtElement.fromJson(it) }
             }
-            return UebersichtSeite(o.optString("name", "Übersicht"), elemente)
+            return UebersichtSeite(o.optString("name", o.optString("Name", "Übersicht")), elemente)
         }
     }
 }
@@ -133,6 +134,8 @@ data class Konfiguration(
         val seitenListe = JSONArray()
         seiten.forEach { seitenListe.put(it.toJson()) }
         return JSONObject()
+            .put("format", "spsmonitor-projekt")
+            .put("version", 1)
             .put("ip", ip).put("rack", rack).put("slot", slot)
             .put("tags", tagListe).put("seiten", seitenListe)
     }
@@ -149,7 +152,7 @@ data class Konfiguration(
             val tags = (0 until tagListe.length()).mapNotNull { i ->
                 tagListe.optJSONObject(i)?.let { PlcTag.fromJson(it) }
             }
-            val seitenListe = o.optJSONArray("seiten") ?: JSONArray()
+            val seitenListe = o.optJSONArray("seiten") ?: o.optJSONArray("Seiten") ?: JSONArray()
             val seiten = (0 until seitenListe.length()).mapNotNull { i ->
                 seitenListe.optJSONObject(i)?.let { UebersichtSeite.fromJson(it) }
             }

@@ -369,8 +369,8 @@ fun ElementDialog(
                                 )
                             }
                             Text(
-                                "Die Seite ist 1000 Einheiten breit – ein Symbol mit 130 füllt " +
-                                    "also etwa ein Achtel.",
+                                "Die Seite ist 1000 Einheiten breit und 700 hoch – gleiche Maße " +
+                                    "wie in der HTML-Oberfläche.",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

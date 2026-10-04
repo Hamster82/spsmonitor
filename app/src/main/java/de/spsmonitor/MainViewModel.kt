@@ -83,20 +83,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun konfigurationAlsText(): String = repo.alsText(
-        Konfiguration(ip, rack.toIntOrNull() ?: 0, slot.toIntOrNull() ?: 2, tags.toList(), seiten.toList())
+    private fun aktuellesProjekt() = Konfiguration(
+        ip = ip,
+        rack = rack.toIntOrNull() ?: 0,
+        slot = slot.toIntOrNull() ?: 2,
+        tags = tags.toList(),
+        seiten = seiten.toList()
     )
 
-    fun konfigurationAusText(text: String): Boolean {
-        val k = repo.ausText(text) ?: return false
+    /** Schreibt das Projekt in eine vom Nutzer gewählte Datei. */
+    fun projektInDatei(ziel: android.net.Uri) {
+        val fehler = repo.inDateiSchreiben(ziel, aktuellesProjekt())
+        meldung = fehler ?: "Projekt gespeichert – die Datei lässt sich auch in der " +
+                            "HTML-Oberfläche öffnen."
+    }
+
+    /** Liest ein Projekt aus einer gewählten Datei. */
+    fun projektAusDatei(quelle: android.net.Uri) {
+        val k = repo.ausDateiLesen(quelle)
+        if (k == null) {
+            meldung = "Die Datei enthält kein gültiges Projekt."
+            return
+        }
         ip = k.ip
         rack = k.rack.toString()
         slot = k.slot.toString()
         tags.clear(); tags.addAll(k.tags)
+        werte.clear()
         seiten.clear(); seiten.addAll(k.seiten)
         aktiveSeite = 0
+        verlauf.clear()
         speichern()
-        return true
+        meldung = "Projekt geladen: ${k.tags.size} Tags, ${k.seiten.size} Seite(n)."
     }
 
     // ---------- Verbindung ----------
