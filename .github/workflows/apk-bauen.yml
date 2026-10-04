@@ -40,7 +40,22 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: APK bauen (verkleinerte Release-Fassung)
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee bauprotokoll.txt
+
+      # Bei einem Fehler das Protokoll im Zweig "protokoll" ablegen, damit es
+      # ohne Umweg über die Actions-Oberfläche abrufbar ist.
+      - name: Protokoll ablegen
+        if: failure()
+        run: |
+          mkdir -p log-out && tail -c 200000 bauprotokoll.txt > log-out/bauprotokoll.txt
+          cd log-out
+          git init -q && git checkout -q -b protokoll
+          git add bauprotokoll.txt
+          git -c user.name="github-actions" -c user.email="actions@github.com" \
+              commit -qm "Protokoll aus ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" protokoll
 
       - name: APK umbenennen
         run: |
