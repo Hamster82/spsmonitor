@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>SPS Monitor – Start</title>
+<!-- Diese Datei ist eine HTML-Anwendung. Windows führt sie mit mshta.exe aus;
+     dadurch darf sie - anders als eine Seite im Browser - Programme starten
+     und wieder beenden. -->
+<hta:application
+  id="spsStart"
+  applicationname="SPS Monitor Start"
+  border="thin"
+  caption="yes"
+  sysmenu="yes"
+  maximizebutton="no"
+  scroll="no"
+  singleinstance="yes"
+  windowstate="normal"
+  icon="" />
+<style>
+  body {
+    font-family: "Segoe UI", Arial, sans-serif; font-size: 14px;
+    background: #f4f6f9; color: #1c2430; margin: 0; padding: 18px;
+    width: 540px; height: 480px; overflow: hidden;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .unter { color: #5a6673; margin: 0 0 14px; }
+  .karte { background: #fff; border: 1px solid #c9ced6; border-radius: 6px;
+           padding: 12px 14px; margin-bottom: 11px; }
+  .zeile { margin: 6px 0; }
+  .punkt { display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+           margin-right: 8px; vertical-align: -1px; background: #bfc7d1; }
+  .punkt.gut { background: #2eb85c; }
+  .punkt.offen { background: #f0b429; }
+  button { font: inherit; padding: 9px 14px; border: 1px solid #c9ced6;
+           border-radius: 5px; background: #fff; cursor: pointer; margin-right: 8px; }
+  button:hover { background: #eef3f9; }
+  button.primaer { background: #1f5f9e; color: #fff; border-color: #1f5f9e; }
+  button[disabled] { opacity: .45; cursor: default; }
+  input { font: inherit; padding: 6px; border: 1px solid #c9ced6; border-radius: 4px; width: 70px; }
+  #meldung { color: #1f5f9e; min-height: 34px; margin-top: 6px; }
+  .klein { font-size: 12px; color: #6b7787; }
+</style>
+</head>
+<body>
+
+<h1>SPS Monitor</h1>
+<p class="unter">Brücke einrichten, starten, beobachten und wieder beenden.</p>
+
+<div class="karte">
+  <div class="zeile"><span class="punkt" id="punktGebaut"></span><span id="textGebaut">wird geprüft …</span></div>
+  <div class="zeile"><span class="punkt" id="punktLaeuft"></span><span id="textLaeuft">wird geprüft …</span></div>
+  <div class="zeile klein">Port: <input id="port" value="8080"> &nbsp;
+    <span class="klein">nur ändern, wenn 8080 belegt ist</span></div>
+</div>
+
+<div class="karte">
+  <button class="primaer" id="knopfStart" onclick="allesStarten()">Starten</button>
+  <button id="knopfStopp" onclick="brueckeStoppen()">Brücke stoppen</button>
+  <button id="knopfOeffnen" onclick="nurOeffnen()">Oberfläche öffnen</button>
+  <button id="knopfBauen" onclick="nurBauen()">Neu bauen</button>
+  <div id="meldung"></div>
+</div>
+
+<div class="karte klein">
+  <label><input type="checkbox" id="mitSchliessen" checked style="width:auto">
+    Brücke beenden, wenn dieses Fenster geschlossen wird</label>
+  <div style="margin-top:6px">
+    Arbeitet gerade jemand in der Oberfläche, bleibt die Brücke trotzdem
+    stehen – sie geht dann zusammen mit der Oberfläche aus.
+  </div>
+  <div style="margin-top:6px">
+    Beim allerersten Start wird die Brücke gebaut – das dauert einige Minuten
+    und braucht Internet. Danach geht es in wenigen Sekunden. Die Oberfläche
+    kann die Brücke anschließend auch selbst starten und stoppen.
+  </div>
+</div>
+
+<script type="text/javascript">
+var shell = new ActiveXObject("WScript.Shell");
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+
+// Ordner dieser Datei ermitteln
+var ordner = (function () {
+  var pfad = unescape(location.pathname.replace(/^\//, "")).replace(/\//g, "\\");
+  return fso.GetParentFolderName(pfad);
+})();
+
+var exePfad = ordner + "\\bin\\Release\\net8.0\\win-x64\\publish\\SpsBruecke.exe";
+
+// Haben wir die Brücke selbst gestartet? Nur dann räumen wir sie beim
+// Schließen wieder weg - eine fremde, schon laufende Brücke bleibt stehen.
+var selbstGestartet = false;
+var uhr = null;
+
+function melde(text) { document.getElementById("meldung").innerHTML = text; }
+function port() {
+  var p = parseInt(document.getElementById("port").value, 10);
+  return (p > 0 && p < 65536) ? p : 8080;
+}
+
+function istGebaut() { return fso.FileExists(exePfad); }
+
+/** Ruft die Brücke auf. Gibt den Antworttext zurück, sonst null. */
+function anBruecke(pfad, methode) {
+  try {
+    var anfrage = new ActiveXObject("Microsoft.XMLHTTP");
+    anfrage.open(methode || "GET", "http://localhost:" + port() + pfad, false);
+    anfrage.setRequestHeader("Pragma", "no-cache");
+    anfrage.send(null);
+    return anfrage.status === 200 ? anfrage.responseText : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function laeuft() { return anBruecke("/api/status", "GET") !== null; }
+
+/** Holt "verbunden": true aus der Antwort, ohne JSON-Unterstützung. */
+function spsVerbunden(antwort) {
+  return antwort !== null && /"verbunden"\s*:\s*true/i.test(antwort);
+}
+
+/** Meldet sich gerade eine Oberfläche im Browser bei der Brücke?
+    Dann kümmert die sich selbst ums Beenden. */
+function oberflaecheHaengtDran(antwort) {
+  return antwort !== null && /"scharf"\s*:\s*true/i.test(antwort);
+}
+
+function standAnzeigen() {
+  var gebaut = istGebaut();
+  document.getElementById("punktGebaut").className = "punkt" + (gebaut ? " gut" : "");
+  document.getElementById("textGebaut").innerHTML =
+    gebaut ? "Brücke ist gebaut" : "Brücke ist noch nicht gebaut – beim Starten passiert das automatisch";
+
+  var antwort = gebaut ? anBruecke("/api/status", "GET") : null;
+  var an = antwort !== null;
+
+  document.getElementById("punktLaeuft").className = "punkt" + (an ? " gut" : (gebaut ? " offen" : ""));
+  document.getElementById("textLaeuft").innerHTML = an
+    ? ("Brücke läuft auf Port " + port() + " – Steuerung " +
+       (spsVerbunden(antwort) ? "verbunden" : "nicht verbunden"))
+    : "Brücke läuft nicht";
+
+  document.getElementById("knopfBauen").disabled = false;
+  document.getElementById("knopfOeffnen").disabled = !an;
+  document.getElementById("knopfStopp").disabled = !an;
+  document.getElementById("knopfStart").disabled = an;
+  return an;
+}
+
+function kurzWarten(ms) {
+  var ende = new Date().getTime() + ms;
+  while (new Date().getTime() < ende) { /* bewusst einfache Pause */ }
+}
+
+function bauen() {
+  melde("Die Brücke wird gebaut. Das Fenster bleibt dabei stehen – bitte warten …");
+  shell.Run('cmd /c ""' + ordner + '\\Kompilieren.bat" auto"', 1, true);
+  if (!istGebaut()) {
+    melde("<b>Das Bauen hat nicht geklappt.</b> Bitte „Kompilieren.bat“ von Hand " +
+          "doppelklicken – dort stehen die Meldungen.");
+    return false;
+  }
+  return true;
+}
+
+function brueckeStarten() {
+  melde("Brücke wird gestartet …");
+  shell.Run('"' + exePfad + '" ' + port(), 7, false);   // 7 = minimiert, ohne Fokus
+  for (var i = 0; i < 30; i++) {
+    kurzWarten(1000);
+    if (laeuft()) { selbstGestartet = true; return true; }
+  }
+  return false;
+}
+
+/** Bittet die Brücke, sich zu beenden. */
+function brueckeBeenden() {
+  anBruecke("/api/beenden", "POST");
+  for (var i = 0; i < 10; i++) {
+    kurzWarten(300);
+    if (!laeuft()) return true;
+  }
+  return !laeuft();
+}
+
+function oberflaecheOeffnen() {
+  shell.Run("http://localhost:" + port(), 1, false);
+}
+
+function allesStarten() {
+  document.getElementById("knopfStart").disabled = true;
+  try {
+    if (!istGebaut()) {
+      if (!bauen()) { standAnzeigen(); return; }
+      standAnzeigen();
+    }
+    if (!laeuft()) {
+      if (!brueckeStarten()) {
+        melde("<b>Die Brücke meldet sich nicht.</b> Vielleicht ist Port " + port() +
+              " belegt – oben einen anderen eintragen, etwa 8081.");
+        standAnzeigen();
+        return;
+      }
+    }
+    standAnzeigen();
+    oberflaecheOeffnen();
+    melde("Läuft. Die Oberfläche öffnet sich im Browser. Dieses Fenster kann " +
+          "offen bleiben – beim Schließen wird die Brücke mit beendet.");
+  } catch (e) {
+    melde("Fehler: " + e.message);
+    standAnzeigen();
+  }
+}
+
+function brueckeStoppen() {
+  if (!laeuft()) { standAnzeigen(); return; }
+  melde("Brücke wird beendet …");
+  if (brueckeBeenden()) {
+    selbstGestartet = false;
+    melde("Die Brücke ist beendet. Die Verbindung zur Steuerung ist damit zu.");
+  } else {
+    melde("Die Brücke antwortet nicht mehr. Notfalls ihr Fenster in der " +
+          "Taskleiste schließen.");
+  }
+  standAnzeigen();
+}
+
+function nurBauen() {
+  document.getElementById("knopfBauen").disabled = true;
+  bauen();
+  standAnzeigen();
+  melde("Bauen abgeschlossen.");
+}
+
+function nurOeffnen() { oberflaecheOeffnen(); }
+
+/* Fenster wird geschlossen: die selbst gestartete Brücke mitnehmen, damit
+   nichts unbemerkt im Hintergrund weiterläuft. */
+window.onbeforeunload = function () {
+  try {
+    if (uhr) window.clearInterval(uhr);
+    if (!selbstGestartet) return;
+    if (!document.getElementById("mitSchliessen").checked) return;
+
+    var antwort = anBruecke("/api/status", "GET");
+    if (antwort === null) return;                 // läuft ohnehin nicht mehr
+
+    // Arbeitet gerade jemand in der Oberfläche, bleibt die Brücke stehen -
+    // sie geht dann zusammen mit dieser Oberfläche aus.
+    if (oberflaecheHaengtDran(antwort)) return;
+
+    brueckeBeenden();
+  } catch (e) { /* beim Schließen nicht weiter wichtig */ }
+};
+
+// Fenstergröße, erster Stand und die laufende Beobachtung
+window.resizeTo(590, 575);
+standAnzeigen();
+uhr = window.setInterval(standAnzeigen, 3000);
+</script>
+</body>
+</html>

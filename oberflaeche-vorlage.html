@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPS Monitor</title>
+<style>
+  :root {
+    --rand: #c9ced6;
+    --flaeche: #f4f6f9;
+    --akzent: #1f5f9e;
+    --akzent-hell: #d3e4f6;
+    --gruen: #2e9e4b;
+    --rot: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 14px;
+    background: var(--flaeche); color: #1c2430;
+  }
+  header {
+    background: var(--akzent-hell); border-bottom: 1px solid var(--rand);
+    padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  header label { font-weight: 600; }
+  input, select, button {
+    font: inherit; padding: 6px 8px; border: 1px solid var(--rand);
+    border-radius: 5px; background: #fff; color: inherit;
+  }
+  button { cursor: pointer; }
+  button:hover { background: #eef3f9; }
+  button.primaer { background: var(--akzent); color: #fff; border-color: var(--akzent); }
+  button.primaer:hover { filter: brightness(1.12); }
+  button.warnung { border-color: var(--rot); color: var(--rot); }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { font-weight: 700; }
+  #status.an { color: var(--gruen); }
+  #status.aus { color: var(--rot); }
+  #version { margin-left: auto; color: #6b7787; font-size: 12px; }
+
+  nav { display: flex; gap: 4px; padding: 8px 14px 0; }
+  nav button { border-bottom: none; border-radius: 6px 6px 0 0; }
+  nav button.aktiv { background: #fff; font-weight: 700; }
+
+  main { padding: 14px; }
+  .seite { display: none; }
+  .seite.aktiv { display: block; }
+  .leiste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .hinweis { color: #667; font-style: italic; margin-bottom: 8px; font-size: 13px; }
+
+  table { border-collapse: collapse; background: #fff; width: 100%; }
+  th, td { border: 1px solid var(--rand); padding: 5px 7px; text-align: left; }
+  th { background: #e8edf3; }
+  td input, td select { width: 100%; border: 1px solid transparent; padding: 4px; }
+  td input:focus, td select:focus { border-color: var(--rand); }
+  td.wert { font-weight: 700; background: #f8fafc; text-align: right; }
+  .tabellenrahmen { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  #leinwand {
+    position: relative; background: #fff; border: 1px solid var(--rand);
+    width: 100%; overflow: auto;
+  }
+  #leinwandInhalt { position: relative; }
+  .element { position: absolute; overflow: hidden; }
+  .element.bearbeiten { outline: 1px solid var(--akzent); cursor: move; touch-action: none; }
+  .element.bearbeiten.gewaehlt { outline: 3px solid #e8590c; }
+  .element canvas { display: block; width: 100%; height: 100%; }
+  .varfeld {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    border: 1px solid #9aa4b2; background: #f2f5f8; font-weight: 700;
+  }
+  .varfeld.editierbar { background: #fdf6d8; cursor: pointer; }
+  .element button { width: 100%; height: 100%; }
+  .textfeld { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+              text-align: center; }
+
+  #diagramm { background: #fff; border: 1px solid var(--rand); width: 100%; height: 400px; }
+  .zweispalten { display: flex; gap: 12px; align-items: flex-start; }
+  .kurvenliste {
+    width: 220px; background: #fff; border: 1px solid var(--rand);
+    max-height: 400px; overflow: auto; padding: 6px;
+  }
+  .kurvenliste label { display: flex; align-items: center; gap: 6px; padding: 4px 2px; }
+  .farbfeld { width: 14px; height: 14px; border: 1px solid #888; display: inline-block; flex: none; }
+  #kennzahlen { margin-top: 8px; color: #333; font-size: 13px; }
+  #meldung { padding: 6px 14px; color: var(--rot); min-height: 22px; }
+
+  /* ---------- Brücke: Anzeige und Bedienung ---------- */
+  #brueckeChip {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid #9aa4b2; border-radius: 14px; padding: 3px 10px;
+    background: #fff; color: #1c2430; font-size: 13px; white-space: nowrap;
+  }
+  #brueckeChip .punkt {
+    width: 9px; height: 9px; border-radius: 50%; background: #bfc7d1; flex: none;
+  }
+  #brueckeChip.laeuft { border-color: #9ad3ad; background: #eaf7ef; }
+  #brueckeChip.laeuft .punkt { background: var(--gruen); }
+  #brueckeChip.aus { border-color: #e0c97f; background: #fff4d6; }
+  #brueckeChip.aus .punkt { background: #e8a33d; }
+
+  #brueckeBalken {
+    background: #f3f6fa; border-bottom: 1px solid var(--rand);
+    padding: 10px 14px; color: #243040;
+  }
+  #brueckeBalken.warnung { background: #fff4d6; border-bottom-color: #e0c97f; color: #6b4f00; }
+  #brueckeBalken h4 { margin: 0 0 6px; font-size: 14px; }
+  #brueckeBalken .zeile { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  #brueckeBalken .daten { font-size: 13px; color: #4a5664; }
+  #brueckeBalken code { background: #fff; border: 1px solid var(--rand); padding: 1px 4px; border-radius: 3px; }
+  #brueckeHilfe { font-size: 13px; margin-top: 8px; line-height: 1.5; }
+  #brueckeSchliessen { margin-left: auto; }
+  body.handy #brueckeChip { font-size: 15px; padding: 6px 12px; }
+
+  /* ---------- Elementdialog ---------- */
+  #dialogHintergrund {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20;
+    align-items: center; justify-content: center;
+  }
+  #dialogHintergrund.offen { display: flex; }
+  #dialog {
+    background: #fff; width: min(680px, 96vw); height: 94vh;
+    display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
+  }
+  #dialogKopf { background: var(--akzent-hell); padding: 10px 14px; border-bottom: 1px solid var(--rand); }
+  #dialogKopf h3 { margin: 0 0 8px; font-size: 17px; }
+  #dialogKopf .knoepfe { display: flex; gap: 10px; }
+  #dialogKopf .knoepfe button { flex: 1; }
+  #dialogInhalt { flex: 1; overflow-y: auto; padding: 14px; }
+  #dialogFuss { border-top: 1px solid var(--rand); padding: 10px 14px; display: flex; gap: 10px; }
+  #dialogFuss button { flex: 1; }
+  .feld { margin-bottom: 12px; }
+  .feld > label { display: block; margin-bottom: 4px; font-weight: 600; }
+  .feld input, .feld select { width: 100%; }
+  .paar { display: flex; gap: 8px; }
+  .paar > * { flex: 1; }
+  #symbolVorschau {
+    height: 150px; border: 1px solid var(--rand); background: #fbfcfd;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+  }
+  .symbolraster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .kachel {
+    border: 1px solid #d5dce4; background: #fbfcfd; padding: 4px; text-align: center;
+    cursor: pointer; border-radius: 4px;
+  }
+  .kachel.gewaehlt { border: 2px solid var(--akzent); background: var(--akzent-hell); }
+  .kachel canvas { width: 100%; height: 62px; display: block; }
+  .kachel span { font-size: 10px; line-height: 1.15; display: block; margin-top: 3px; }
+  .gruppentitel { font-weight: 700; color: var(--akzent); margin: 10px 0 6px; }
+
+  /* ---------- Handy-Ansicht ---------- */
+  body.handy { font-size: 16px; }
+  body.handy header { padding: 8px 10px; gap: 6px; }
+  body.handy input, body.handy select, body.handy button { padding: 10px; font-size: 16px; }
+  body.handy header input { width: 108px; }
+  body.handy nav button { flex: 1; padding: 11px 4px; }
+  body.handy main { padding: 8px; }
+  body.handy .leiste button { flex: 1 1 auto; min-height: 44px; }
+  body.handy table { font-size: 14px; min-width: 700px; }
+  body.handy .zweispalten { flex-direction: column; }
+  body.handy .kurvenliste { width: 100%; max-height: 160px; }
+  body.handy #diagramm { height: 260px; }
+  body.handy #dialog { width: 100vw; height: 100vh; border-radius: 0; }
+  body.handy .symbolraster { grid-template-columns: repeat(2, 1fr); }
+</style>
+</head>
+<body>
+
+<header>
+  <label>IP:</label><input id="ip" value="192.168.0.1" size="12">
+  <label>Rack:</label><input id="rack" value="0" size="2" style="width:56px">
+  <label>Slot:</label><input id="slot" value="2" size="2" style="width:56px">
+  <button id="verbindenBtn" class="primaer">Verbinden</button>
+  <span id="status" class="aus">Nicht verbunden</span>
+  <label><input type="checkbox" id="autoRefresh"> alle 2 s</label>
+  <button id="lesenBtn">Jetzt lesen</button>
+  <label>Ansicht:</label>
+  <select id="ansichtModus">
+    <option value="auto">Automatisch</option>
+    <option value="handy">Handy</option>
+    <option value="desktop">Desktop</option>
+  </select>
+  <span id="brueckeChip" title="Zustand der Brücke – anklicken zum Bedienen">
+    <span class="punkt"></span><span id="brueckeChipText">Brücke …</span>
+  </span>
+  <span id="version"></span>
+</header>
+
+<div id="brueckeBalken" style="display:none">
+  <h4 id="brueckeTitel">Brücke</h4>
+  <div class="daten" id="brueckeDaten"></div>
+
+  <div class="zeile">
+    <button id="brueckeStart" class="primaer">Brücke starten</button>
+    <button id="brueckeStopp">Brücke stoppen</button>
+    <button id="erneutVerbinden">Erneut suchen</button>
+    <button id="brueckeSchliessen">Schließen</button>
+  </div>
+
+  <div class="zeile">
+    <label>Adresse:</label>
+    <input id="brueckeAdresse" style="width:190px" placeholder="localhost:8080">
+    <label title="Beim Schließen des Browserfensters wird die Brücke mit beendet.">
+      <input type="checkbox" id="brueckeMitBeenden"> beim Schließen mit beenden
+    </label>
+  </div>
+
+  <div id="brueckeHilfe"></div>
+</div>
+
+<nav>
+  <button class="tab aktiv" data-ziel="tagsSeite">Tags</button>
+  <button class="tab" data-ziel="uebersichtSeite">Übersicht</button>
+  <button class="tab" data-ziel="auswertungSeite">Auswertung</button>
+</nav>
+
+<main>
+
+  <!-- ===================== TAGS ===================== -->
+  <section id="tagsSeite" class="seite aktiv">
+    <div class="leiste">
+      <button id="tagHinzu">Tag hinzufügen</button>
+      <button id="projektSpeichern" class="primaer">Projekt speichern</button>
+      <button id="projektLaden">Projekt laden</button>
+      <input type="file" id="projektDatei" accept=".json" style="display:none">
+    </div>
+    <div class="hinweis">
+      DB-Nummer und Offset stammen aus dem Step7-/TIA-Projekt (z.&nbsp;B. DBD4 → Offset 4,
+      DBX8.0 → Offset 8 / Bit 0). Ein gespeichertes Projekt lässt sich unverändert in der
+      Android-App öffnen.
+    </div>
+    <div class="tabellenrahmen">
+      <table id="tagsTabelle">
+        <thead><tr>
+          <th>Name</th><th style="width:70px">DB</th><th style="width:80px">Offset</th>
+          <th style="width:60px">Bit</th><th style="width:90px">Typ</th>
+          <th style="width:110px">Wert</th><th style="width:180px">Schreiben</th>
+          <th style="width:50px"></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== ÜBERSICHT ===================== -->
+  <section id="uebersichtSeite" class="seite">
+    <div class="leiste" id="seitenLeiste"></div>
+    <div class="leiste">
+      <label><input type="checkbox" id="bearbeitenModus"> <strong>Bearbeiten</strong></label>
+      <span id="bearbeitenKnoepfe" style="display:none">
+        <button class="neuesElement" data-typ="Symbol">+ Symbol</button>
+        <button class="neuesElement" data-typ="Text">+ Text</button>
+        <button class="neuesElement" data-typ="Variable">+ Messwert</button>
+        <button class="neuesElement" data-typ="Button">+ Schalter</button>
+        <button class="neuesElement" data-typ="Seitenwechsel">+ Seitenwechsel</button>
+        <button id="elementBearbeiten">Bearbeiten</button>
+        <button id="elementLoeschen" class="warnung">Löschen</button>
+        <button id="seiteNeu">Neue Seite</button>
+        <button id="seiteUmbenennen">Umbenennen</button>
+        <button id="seiteLoeschen" class="warnung">Seite löschen</button>
+      </span>
+    </div>
+    <div class="hinweis" id="uebersichtHinweis">
+      Live-Ansicht – Schalter und gelb hinterlegte Felder sind bedienbar.
+    </div>
+    <div id="leinwand"><div id="leinwandInhalt"></div></div>
+  </section>
+
+  <!-- ===================== AUSWERTUNG ===================== -->
+  <section id="auswertungSeite" class="seite">
+    <div class="leiste">
+      <label><input type="checkbox" id="aufzeichnung" checked> Aufzeichnung läuft</label>
+      <label>Zeitraum:</label>
+      <select id="zeitraum">
+        <option value="5">Letzte 5 Minuten</option>
+        <option value="30" selected>Letzte 30 Minuten</option>
+        <option value="120">Letzte 2 Stunden</option>
+        <option value="0">Gesamter Verlauf</option>
+      </select>
+      <button id="csvExport">CSV speichern</button>
+      <button id="csvImport">CSV laden</button>
+      <input type="file" id="csvDatei" accept=".csv" style="display:none">
+      <button id="verlaufLoeschen" class="warnung">Aufzeichnung löschen</button>
+      <span id="punkteInfo" class="hinweis" style="margin:0"></span>
+    </div>
+    <div class="zweispalten">
+      <div class="kurvenliste" id="kurvenliste"></div>
+      <div style="flex:1;min-width:0">
+        <canvas id="diagramm"></canvas>
+        <div id="kennzahlen"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="meldung"></div>
+
+<!-- ===================== Elementdialog ===================== -->
+<div id="dialogHintergrund">
+  <div id="dialog">
+    <div id="dialogKopf">
+      <h3 id="dialogTitel">Element einstellen</h3>
+      <div class="knoepfe">
+        <button class="primaer" id="dialogOk">Übernehmen</button>
+        <button id="dialogAbbrechen">Abbrechen</button>
+      </div>
+    </div>
+    <div id="dialogInhalt"></div>
+    <div id="dialogFuss">
+      <button id="dialogAbbrechen2">Abbrechen</button>
+      <button class="primaer" id="dialogOk2">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ===================================================================
+   SPS Monitor – HTML-Oberfläche
+   Liest und schreibt dasselbe projekt.json wie die Android-App.
+   =================================================================== */
+
+const VERSION = "1.4";
+
+/*SYMBOLE_HIER*/
+
+// ===================== Grundlagen =====================
+
+// Leinwand einer Seite in gedachten Einheiten – gleich wie in der App.
+const LEINWAND_B = 1000;
+const LEINWAND_H = 700;
+
+const IST_APP = typeof window.SpsNativ !== "undefined";
+const SPEICHER = "spsmonitor.projekt";
+const ADRESS_SPEICHER = "spsmonitor.bruecke";
+const MITBEENDEN_SPEICHER = "spsmonitor.mitbeenden";
+
+// Wie lange die Brücke höchstens ohne Lebenszeichen weiterläuft.
+const WACHHUND_SEKUNDEN = 25;
+// Abstand der Lebenszeichen – deutlich kürzer als die Frist oben.
+const PULS_MS = 4000;
+
+// Wird die Seite von der Brücke geliefert, ist deren Adresse die eigene.
+// Beim Doppelklick auf die Datei greift die zuletzt benutzte, sonst localhost.
+let BRUECKE = (function () {
+  if (location.protocol.startsWith("http")) return location.origin;
+  try {
+    const gemerkt = localStorage.getItem(ADRESS_SPEICHER);
+    if (gemerkt) return gemerkt;
+  } catch (e) { /* privater Modus */ }
+  return "http://localhost:8080";
+})();
+
+/** Nimmt "localhost:8081", "192.168.0.5:8080" oder eine volle Adresse an. */
+function brueckeSetzen(eingabe) {
+  let a = (eingabe || "").trim();
+  if (!a) return;
+  if (!/^https?:\/\//i.test(a)) a = "http://" + a;
+  a = a.replace(/\/+$/, "");
+  BRUECKE = a;
+  try { localStorage.setItem(ADRESS_SPEICHER, a); } catch (e) {}
+}
+
+const FARBEN = ["#1f5f9e","#e8590c","#2e9e4b","#8e44ad","#c9a227",
+                "#c0392b","#128277","#8b5a2b","#d63384","#495057"];
+
+const $ = id => document.getElementById(id);
+const melde = t => { $("meldung").textContent = t || ""; };
+
+let projekt = leeresProjekt();
+let werte = {};
+let verlauf = [];
+let aktiveSeite = 0;
+let gewaehltesElement = null;
+let verbunden = false;
+let brueckeDa = false;
+let timer = null;
+
+// Zustand der Brücke, so wie sie ihn zuletzt gemeldet hat
+let brueckeStand = null;
+let pulsTimer = null;
+let balkenOffen = false;
+let startetGerade = false;
+
+function leeresProjekt() {
+  return {
+    format: "spsmonitor-projekt",
+    version: 1,
+    ip: "192.168.0.1", rack: 0, slot: 2,
+    tags: [
+      { name: "Einspeisung",  db: 1, offset: 0, bit: 0, typ: "Real" },
+      { name: "Gasverbrauch", db: 1, offset: 4, bit: 0, typ: "Real" },
+      { name: "CH4-Gehalt",   db: 1, offset: 8, bit: 0, typ: "Real" }
+    ],
+    seiten: [{ name: "Übersicht 1", elemente: [] }]
+  };
+}
+
+/** Macht aus beliebigen Eingangsdaten ein vollständiges Projekt. */
+function projektAusDaten(d) {
+  if (!d || typeof d !== "object") return null;
+  const p = leeresProjekt();
+
+  if (typeof d.ip === "string") p.ip = d.ip;
+  if (d.rack !== undefined) p.rack = parseInt(d.rack) || 0;
+  if (d.slot !== undefined) p.slot = parseInt(d.slot) || 2;
+
+  if (Array.isArray(d.tags) && d.tags.length) {
+    p.tags = d.tags.map(t => ({
+      // Ältere Dateien hatten große Anfangsbuchstaben
+      name: t.name ?? t.Name ?? "",
+      db: parseInt(t.db ?? t.Db ?? 1) || 0,
+      offset: parseInt(t.offset ?? t.Offset ?? 0) || 0,
+      bit: parseInt(t.bit ?? t.Bit ?? 0) || 0,
+      typ: t.typ ?? t.Typ ?? "Real"
+    }));
+  }
+
+  const rohSeiten = Array.isArray(d.seiten) ? d.seiten
+                  : (Array.isArray(d.Seiten) ? d.Seiten : null);
+  if (rohSeiten && rohSeiten.length) {
+    p.seiten = rohSeiten.map(s => ({
+      name: s.name ?? s.Name ?? "Übersicht",
+      elemente: (s.elemente ?? s.Elemente ?? []).map(elementAusDaten)
+    }));
+  } else if (Array.isArray(d.elemente)) {
+    // Ganz alte Fassung: nur eine Liste von Elementen
+    p.seiten = [{ name: "Übersicht 1", elemente: d.elemente.map(elementAusDaten) }];
+  }
+  return p;
+}
+
+function elementAusDaten(e) {
+  const z = (a, b, s) => { const v = a ?? b; const n = parseFloat(v); return isNaN(n) ? s : n; };
+  return {
+    id: e.id ?? e.Id ?? ("e" + Math.random().toString(36).slice(2)),
+    typ: e.typ ?? e.Typ ?? "Symbol",
+    x: z(e.x, e.X, 40), y: z(e.y, e.Y, 40),
+    breite: z(e.breite, e.Breite, 130), hoehe: z(e.hoehe, e.Hoehe, 130),
+    text: e.text ?? e.Text ?? "",
+    schriftGroesse: z(e.schriftGroesse, e.SchriftGroesse, 15),
+    symbolTyp: e.symbolTyp ?? e.SymbolTyp ?? "Motor",
+    tagName: e.tagName ?? e.TagName ?? "",
+    einheit: e.einheit ?? e.Einheit ?? "",
+    nachkommastellen: Math.round(z(e.nachkommastellen, e.Nachkommastellen, 1)),
+    editierbar: !!(e.editierbar ?? e.Editierbar ?? false),
+    minWert: z(e.minWert, e.MinWert, 0), maxWert: z(e.maxWert, e.MaxWert, 100),
+    sollwert: z(e.sollwert, e.Sollwert, 40), hysterese: z(e.hysterese, e.Hysterese, 2),
+    schreibWert: e.schreibWert ?? e.SchreibWert ?? "True",
+    zielSeite: e.zielSeite ?? e.ZielSeite ?? ""
+  };
+}
+
+// ===================== Schnittstelle zur SPS =====================
+
+/** fetch mit Zeitgrenze – eine nicht erreichbare Brücke soll nicht hängen. */
+async function holen(pfad, einstellungen = {}, msGrenze = 3000) {
+  const abbruch = new AbortController();
+  const uhr = setTimeout(() => abbruch.abort(), msGrenze);
+  try {
+    return await fetch(BRUECKE + pfad, { ...einstellungen, signal: abbruch.signal });
+  } finally {
+    clearTimeout(uhr);
+  }
+}
+
+const api = {
+  async status() {
+    if (IST_APP) return JSON.parse(SpsNativ.status());
+    return (await holen("/api/status")).json();
+  },
+  /** Lebenszeichen der Oberfläche; liefert denselben Stand wie status(). */
+  async lebenszeichen(an) {
+    return (await holen("/api/lebenszeichen", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ an: an, sekunden: WACHHUND_SEKUNDEN })
+    })).json();
+  },
+  async beenden() {
+    return (await holen("/api/beenden", { method: "POST" }, 4000)).json();
+  },
+  async verbinden(ip, rack, slot) {
+    if (IST_APP) return JSON.parse(SpsNativ.verbinden(ip, rack, slot));
+    return (await fetch(BRUECKE + "/api/verbinden", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ip, rack, slot })
+    })).json();
+  },
+  async trennen() {
+    if (IST_APP) return JSON.parse(SpsNativ.trennen());
+    return (await fetch(BRUECKE + "/api/trennen", { method: "POST" })).json();
+  },
+  async lesen(tags) {
+    if (IST_APP) return JSON.parse(SpsNativ.lesen(JSON.stringify(tags)));
+    return (await fetch(BRUECKE + "/api/lesen", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(tags)
+    })).json();
+  },
+  async schreiben(tag, wert) {
+    if (IST_APP) return JSON.parse(SpsNativ.schreiben(JSON.stringify(tag), String(wert)));
+    return (await fetch(BRUECKE + "/api/schreiben", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag, wert: String(wert) })
+    })).json();
+  },
+  async projektLaden() {
+    if (IST_APP) return JSON.parse(SpsNativ.projektLaden());
+    return (await holen("/api/projekt")).json();
+  },
+  async projektSpeichern(p) {
+    if (IST_APP) return JSON.parse(SpsNativ.projektSpeichern(JSON.stringify(p)));
+    return (await holen("/api/projekt", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p)
+    }, 6000)).json();
+  }
+};
+
+// ===================== Brücke: Anzeige, Start und Stopp =====================
+
+/* Eine Seite im Browser darf von sich aus kein Programm starten – das
+   verbietet jeder Browser, und das ist auch gut so. Die Brücke meldet sich
+   deshalb beim ersten Lauf unter dem eigenen Benutzerkonto als Behandler für
+   Adressen der Form  spsmonitor://start?port=8080  an (nur HKEY_CURRENT_USER,
+   also ohne Administratorrechte). Danach genügt hier ein Klick: Windows
+   startet die Brücke, der Browser fragt dabei einmal kurz nach.
+   Beim allerersten Mal muss die Brücke noch über  SPS Monitor starten.bat
+   bzw.  SPS Monitor.hta  hochkommen – vorher kennt Windows sie nicht. */
+
+/* Mitbeenden und Starten gehen nur, wenn die Brücke auf diesem Rechner läuft.
+   Zeigt die Adresse auf ein anderes Gerät im Netz, bleibt sie unberührt. */
+function brueckeIstLokal() {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(BRUECKE);
+}
+
+function mitBeendenAn() {
+  return brueckeIstLokal() && $("brueckeMitBeenden").checked;
+}
+
+function brueckePort() {
+  const treffer = /:(\d+)\s*$/.exec(BRUECKE);
+  return treffer ? treffer[1] : "8080";
+}
+
+/** Kopfzeile und Balken auf den zuletzt gemeldeten Stand bringen. */
+function brueckeAnzeigeAktualisieren() {
+  const chip = $("brueckeChip");
+  const text = $("brueckeChipText");
+
+  if (IST_APP) {                       // in der Android-App gibt es keine Brücke
+    chip.style.display = "none";
+    $("brueckeBalken").style.display = "none";
+    return;
+  }
+
+  chip.className = brueckeDa ? "laeuft" : "aus";
+  text.textContent = brueckeDa ? "Brücke läuft" : "Brücke aus";
+
+  // Der Balken geht von selbst auf, solange die Brücke fehlt.
+  const zeigen = balkenOffen || !brueckeDa;
+  $("brueckeBalken").style.display = zeigen ? "" : "none";
+  $("brueckeBalken").className = brueckeDa ? "" : "warnung";
+  if (!zeigen) return;
+
+  $("brueckeTitel").textContent = brueckeDa
+    ? "Die Brücke läuft"
+    : "Die Brücke läuft nicht";
+
+  if (brueckeDa && brueckeStand) {
+    const s = brueckeStand;
+    const lauf = Math.round((s.laufzeitSekunden || 0) / 60);
+    const w = s.wachhund || {};
+    $("brueckeDaten").innerHTML =
+      "Adresse <code>" + BRUECKE + "</code> &middot; Fassung " + (s.version || "?") +
+      " &middot; seit " + (lauf < 1 ? "weniger als einer Minute" : lauf + " Minuten") +
+      " &middot; Steuerung " + (s.verbunden ? "verbunden" : "nicht verbunden") +
+      (w.scharf ? " &middot; endet mit dieser Seite" : "");
+  } else {
+    $("brueckeDaten").innerHTML =
+      "Unter <code>" + BRUECKE + "</code> meldet sich nichts.";
+  }
+
+  const lokal = brueckeIstLokal();
+  $("brueckeStart").disabled = brueckeDa || startetGerade || !lokal;
+  $("brueckeStopp").disabled = !brueckeDa;
+  $("brueckeMitBeenden").disabled = !lokal;
+
+  let hilfe;
+  if (brueckeDa && lokal) {
+    hilfe = "Mit <b>Brücke stoppen</b> endet sie sofort. Ist der Haken oben gesetzt, " +
+            "geht sie außerdem von selbst aus, sobald dieses Fenster geschlossen wird – " +
+            "ein Neuladen der Seite nimmt sie nicht mit.";
+  } else if (brueckeDa) {
+    hilfe = "Die Brücke läuft auf einem anderen Rechner. Beenden geht von hier aus, " +
+            "starten nicht – das muss dort geschehen.";
+  } else if (lokal) {
+    hilfe = "Ohne Brücke lassen sich Seiten gestalten, Projekte laden und speichern und " +
+            "CSV-Dateien auswerten – nur Live-Werte aus der Steuerung fehlen.<br>" +
+            "<b>Brücke starten</b> geht, sobald sie einmal gelaufen ist; der Browser " +
+            "fragt dabei kurz nach. Beim allerersten Mal im Projektordner " +
+            "<code>SPS Monitor starten.bat</code> doppelklicken (oder " +
+            "<code>SPS Monitor.hta</code>) – dabei meldet sich die Brücke bei Windows an.";
+  } else {
+    hilfe = "Unter dieser Adresse läuft nichts. Auf dem Rechner mit der Brücke " +
+            "<code>SPS Monitor starten.bat</code> doppelklicken, oder hier die " +
+            "richtige Adresse eintragen.";
+  }
+  $("brueckeHilfe").innerHTML = hilfe;
+}
+
+/** Holt den Stand und schickt dabei gleich das Lebenszeichen mit. */
+async function brueckePruefen() {
+  if (IST_APP) return;
+  try {
+    const mit = mitBeendenAn();
+    brueckeStand = mit ? await api.lebenszeichen(true) : await api.status();
+    brueckeDa = true;
+    statusSetzen(!!brueckeStand.verbunden);
+  } catch (e) {
+    brueckeStand = null;
+    brueckeDa = false;
+    statusSetzen(false);
+  }
+  brueckeAnzeigeAktualisieren();
+}
+
+function pulsStarten() {
+  if (IST_APP || pulsTimer) return;
+  pulsTimer = setInterval(brueckePruefen, PULS_MS);
+}
+
+$("brueckeChip").onclick = () => {
+  balkenOffen = !balkenOffen;
+  brueckeAnzeigeAktualisieren();
+};
+$("brueckeSchliessen").onclick = () => {
+  balkenOffen = false;
+  brueckeAnzeigeAktualisieren();
+};
+
+$("brueckeMitBeenden").onchange = async () => {
+  try { localStorage.setItem(MITBEENDEN_SPEICHER, mitBeendenAn() ? "ja" : "nein"); } catch (e) {}
+  // Haken weg: dem Wachhund sofort abbestellen, sonst läuft seine Frist ab.
+  if (brueckeDa && brueckeIstLokal()) {
+    try { brueckeStand = await api.lebenszeichen(mitBeendenAn()); } catch (e) {}
+  }
+  brueckeAnzeigeAktualisieren();
+  melde(mitBeendenAn()
+    ? "Die Brücke endet künftig zusammen mit diesem Fenster."
+    : "Die Brücke läuft künftig weiter, auch wenn dieses Fenster zugeht.");
+};
+
+$("brueckeStart").onclick = async () => {
+  if (brueckeDa) return;
+  startetGerade = true;
+  $("brueckeStart").disabled = true;
+  melde("Die Brücke wird gestartet …");
+
+  // Windows übergibt diese Adresse an die Brücke. Der Browser fragt dabei
+  // einmal nach – das ist die übliche Rückfrage bei eigenen Adressarten.
+  try {
+    window.location.href = "spsmonitor://start?port=" + brueckePort();
+  } catch (e) { /* Browser ohne Behandler melden sich gar nicht */ }
+
+  // Bis zu 30 Sekunden auf das erste Lebenszeichen warten.
+  for (let i = 0; i < 40 && !brueckeDa; i++) {
+    await new Promise(r => setTimeout(r, 750));
+    await brueckePruefen();
+  }
+  startetGerade = false;
+
+  if (brueckeDa) {
+    await projektHolen();
+    $("ip").value = projekt.ip;
+    $("rack").value = projekt.rack;
+    $("slot").value = projekt.slot;
+    allesNeuAufbauen();
+    melde("Die Brücke läuft.");
+  } else {
+    melde("Die Brücke meldet sich nicht. Beim allerersten Mal muss sie über " +
+          "„SPS Monitor starten.bat“ hochkommen – danach geht es von hier aus.");
+  }
+  brueckeAnzeigeAktualisieren();
+};
+
+$("brueckeStopp").onclick = async () => {
+  if (!brueckeDa) return;
+  if (!confirm("Die Brücke beenden?\n\nDamit endet die Verbindung zur Steuerung – " +
+               "auch für andere Geräte, die gerade darüber zugreifen.")) return;
+  try { await api.beenden(); } catch (e) { /* sie geht mitten in der Antwort */ }
+  brueckeStand = null;
+  brueckeDa = false;
+  statusSetzen(false);
+  balkenOffen = true;
+  brueckeAnzeigeAktualisieren();
+  melde("Die Brücke wurde beendet.");
+};
+
+/* Fenster geht zu: der Brücke Bescheid geben. sendBeacon kommt auch dann noch
+   durch, wenn die Seite schon im Abbau ist. Die Brücke wartet danach ein paar
+   Sekunden – ein bloßes Neuladen nimmt sie also nicht mit. */
+function abmelden() {
+  if (IST_APP || !brueckeDa || !mitBeendenAn()) return;
+  try {
+    if (navigator.sendBeacon) navigator.sendBeacon(BRUECKE + "/api/abmelden");
+    else holen("/api/abmelden", { method: "POST", keepalive: true }, 1000);
+  } catch (e) { /* beim Schließen nicht weiter wichtig */ }
+}
+window.addEventListener("pagehide", abmelden);
+window.addEventListener("beforeunload", abmelden);
+
+// ===================== Projekt laden und sichern =====================
+
+async function projektHolen() {
+  try {
+    const daten = await api.projektLaden();
+    const p = projektAusDaten(daten);
+    brueckeDa = true;
+    if (p && (p.tags.length || p.seiten.some(s => s.elemente.length))) projekt = p;
+  } catch (e) {
+    brueckeDa = false;
+    try {
+      const roh = localStorage.getItem(SPEICHER);
+      if (roh) { const p = projektAusDaten(JSON.parse(roh)); if (p) projekt = p; }
+    } catch (e2) { /* nichts gespeichert */ }
+  }
+  brueckeAnzeigeAktualisieren();
+}
+
+async function sichern(still = true) {
+  projekt.ip = $("ip").value.trim();
+  projekt.rack = parseInt($("rack").value) || 0;
+  projekt.slot = parseInt($("slot").value) || 2;
+
+  try { localStorage.setItem(SPEICHER, JSON.stringify(projekt)); } catch (e) { /* privater Modus */ }
+  try {
+    await api.projektSpeichern(projekt);
+    brueckeDa = true;
+  } catch (e) {
+    brueckeDa = false;
+    if (!still) melde("Ohne Brücke nur im Browser gesichert.");
+  }
+  brueckeAnzeigeAktualisieren();
+}
+
+$("projektSpeichern").onclick = () => {
+  sichern(false);
+  const blob = new Blob([JSON.stringify(projekt, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "projekt.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  melde("Projekt gespeichert – die Datei lässt sich auch in der Android-App öffnen.");
+};
+
+$("projektLaden").onclick = () => $("projektDatei").click();
+$("projektDatei").onchange = ev => {
+  const datei = ev.target.files[0];
+  ev.target.value = "";
+  if (!datei) return;
+  const leser = new FileReader();
+  leser.onload = () => {
+    try {
+      const p = projektAusDaten(JSON.parse(leser.result));
+      if (!p) { melde("Die Datei enthält kein gültiges Projekt."); return; }
+      projekt = p;
+      aktiveSeite = 0;
+      gewaehltesElement = null;
+      $("ip").value = projekt.ip;
+      $("rack").value = projekt.rack;
+      $("slot").value = projekt.slot;
+      allesNeuAufbauen();
+      sichern();
+      melde("Projekt geladen: " + projekt.tags.length + " Tags, " + projekt.seiten.length + " Seite(n).");
+    } catch (e) {
+      melde("Datei konnte nicht gelesen werden: " + e.message);
+    }
+  };
+  leser.readAsText(datei);
+};
+
+function allesNeuAufbauen() {
+  tagsTabelleAufbauen();
+  seitenLeisteAufbauen();
+  leinwandZeichnen();
+  kurvenlisteAufbauen();
+  diagrammZeichnen();
+}
+
+// ===================== Verbindung =====================
+
+function statusSetzen(neu) {
+  verbunden = neu;
+  $("status").textContent = neu ? "Verbunden" : "Nicht verbunden";
+  $("status").className = neu ? "an" : "aus";
+  $("verbindenBtn").textContent = neu ? "Trennen" : "Verbinden";
+}
+
+$("verbindenBtn").onclick = async () => {
+  try {
+    if (verbunden) {
+      await api.trennen();
+      $("autoRefresh").checked = false; autoRefreshUmschalten();
+      statusSetzen(false); melde("");
+      return;
+    }
+    const d = await api.verbinden($("ip").value.trim(),
+                                  parseInt($("rack").value) || 0,
+                                  parseInt($("slot").value) || 2);
+    statusSetzen(!!d.ok);
+    melde(d.ok ? "" : "Verbindung fehlgeschlagen: " + d.fehler);
+    if (d.ok) { sichern(); alleLesen(); }
+  } catch (e) {
+    melde("Keine Verbindung zur Brücke. Läuft SpsBruecke.exe?");
+  }
+};
+
+async function alleLesen() {
+  if (!verbunden) { melde("Erst verbinden."); return; }
+  try {
+    const ergebnisse = await api.lesen(projekt.tags);
+    let fehler = null;
+    ergebnisse.forEach(e => {
+      if (e.fehler) { if (!fehler) fehler = e.name + ": " + e.fehler; }
+      else werte[e.name] = e.wert;
+    });
+    melde(fehler || "");
+
+    if ($("aufzeichnung").checked) {
+      const punkt = { t: Date.now(), w: {} };
+      Object.entries(werte).forEach(([n, w]) => {
+        const z = symbolAlsZahl(w);
+        if (z !== null) punkt.w[n] = z;
+      });
+      if (Object.keys(punkt.w).length) {
+        verlauf.push(punkt);
+        if (verlauf.length > 20000) verlauf.splice(0, verlauf.length - 20000);
+      }
+    }
+
+    werteAnzeigen();
+    if (!$("bearbeitenModus").checked) leinwandZeichnen();
+    kurvenlisteAufbauen();
+    diagrammZeichnen();
+  } catch (e) {
+    melde("Lesen fehlgeschlagen: " + e.message);
+  }
+}
+
+async function tagSchreiben(tag, neuerWert, woher) {
+  if (!verbunden) { melde("Erst verbinden."); return; }
+  if (!confirm(woher + "\n\n'" + neuerWert + "' auf '" + tag.name +
+               "' (DB" + tag.db + ", Offset " + tag.offset + ") schreiben?\n" +
+               "Das wirkt sofort auf die laufende Anlage.")) return;
+  try {
+    const d = await api.schreiben(tag, neuerWert);
+    melde(d.ok ? "Geschrieben: " + tag.name + " = " + neuerWert : "Fehler: " + d.fehler);
+    if (d.ok) alleLesen();
+  } catch (e) {
+    melde("Schreiben fehlgeschlagen: " + e.message);
+  }
+}
+
+$("lesenBtn").onclick = alleLesen;
+
+function autoRefreshUmschalten() {
+  if (timer) { clearInterval(timer); timer = null; }
+  if ($("autoRefresh").checked) timer = setInterval(alleLesen, 2000);
+}
+$("autoRefresh").onchange = autoRefreshUmschalten;
+
+// ===================== Reiter =====================
+
+document.querySelectorAll(".tab").forEach(k => {
+  k.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("aktiv"));
+    document.querySelectorAll(".seite").forEach(s => s.classList.remove("aktiv"));
+    k.classList.add("aktiv");
+    $(k.dataset.ziel).classList.add("aktiv");
+    if (k.dataset.ziel === "uebersichtSeite") leinwandZeichnen();
+    if (k.dataset.ziel === "auswertungSeite") { kurvenlisteAufbauen(); diagrammZeichnen(); }
+  };
+});
+
+// ===================== Tags =====================
+
+function tagsTabelleAufbauen() {
+  const koerper = $("tagsTabelle").querySelector("tbody");
+  koerper.innerHTML = "";
+
+  projekt.tags.forEach((tag, index) => {
+    const zeile = document.createElement("tr");
+
+    const feld = (schluessel, zahl) => {
+      const td = document.createElement("td");
+      const e = document.createElement("input");
+      e.type = zahl ? "number" : "text";
+      e.value = tag[schluessel];
+      e.onchange = () => {
+        if (schluessel === "name") delete werte[tag.name];
+        tag[schluessel] = zahl ? (parseInt(e.value) || 0) : e.value;
+        sichern(); kurvenlisteAufbauen();
+      };
+      td.appendChild(e);
+      return td;
+    };
+
+    zeile.appendChild(feld("name", false));
+    zeile.appendChild(feld("db", true));
+    zeile.appendChild(feld("offset", true));
+    zeile.appendChild(feld("bit", true));
+
+    const tdTyp = document.createElement("td");
+    const aus = document.createElement("select");
+    ["Bool","Byte","Int","DInt","Real"].forEach(t => {
+      const o = document.createElement("option");
+      o.textContent = t;
+      if (tag.typ === t) o.selected = true;
+      aus.appendChild(o);
+    });
+    aus.onchange = () => { tag.typ = aus.value; sichern(); };
+    tdTyp.appendChild(aus);
+    zeile.appendChild(tdTyp);
+
+    const tdWert = document.createElement("td");
+    tdWert.className = "wert";
+    tdWert.textContent = werte[tag.name] ?? "–";
+    zeile.appendChild(tdWert);
+
+    const tdS = document.createElement("td");
+    const eingabe = document.createElement("input");
+    eingabe.placeholder = "neuer Wert";
+    eingabe.style.width = "58%";
+    const knopf = document.createElement("button");
+    knopf.textContent = "→";
+    knopf.title = "Schreiben";
+    knopf.onclick = () => {
+      if (!eingabe.value) { melde("Kein Wert eingetragen."); return; }
+      tagSchreiben(tag, eingabe.value, "Tabelle");
+    };
+    tdS.appendChild(eingabe); tdS.appendChild(knopf);
+    zeile.appendChild(tdS);
+
+    const tdW = document.createElement("td");
+    const weg = document.createElement("button");
+    weg.textContent = "✕";
+    weg.onclick = () => {
+      delete werte[tag.name];
+      projekt.tags.splice(index, 1);
+      tagsTabelleAufbauen(); kurvenlisteAufbauen(); sichern();
+    };
+    tdW.appendChild(weg);
+    zeile.appendChild(tdW);
+
+    koerper.appendChild(zeile);
+  });
+}
+
+function werteAnzeigen() {
+  $("tagsTabelle").querySelectorAll("tbody tr").forEach((zeile, i) => {
+    const tag = projekt.tags[i];
+    if (tag) zeile.querySelector("td.wert").textContent = werte[tag.name] ?? "–";
+  });
+}
+
+$("tagHinzu").onclick = () => {
+  projekt.tags.push({ name: "Tag " + (projekt.tags.length + 1), db: 1, offset: 0, bit: 0, typ: "Real" });
+  tagsTabelleAufbauen(); sichern();
+};
+
+// ===================== Übersicht =====================
+
+function seitenLeisteAufbauen() {
+  const leiste = $("seitenLeiste");
+  leiste.innerHTML = "<strong style='margin-right:4px'>Seite:</strong>";
+  projekt.seiten.forEach((s, i) => {
+    const k = document.createElement("button");
+    k.textContent = s.name;
+    if (i === aktiveSeite) k.className = "primaer";
+    k.onclick = () => { aktiveSeite = i; gewaehltesElement = null; seitenLeisteAufbauen(); leinwandZeichnen(); };
+    leiste.appendChild(k);
+  });
+}
+
+$("bearbeitenModus").onchange = () => {
+  const an = $("bearbeitenModus").checked;
+  $("bearbeitenKnoepfe").style.display = an ? "" : "none";
+  $("uebersichtHinweis").textContent = an
+    ? "Elemente ziehen zum Verschieben, antippen zum Auswählen, dann „Bearbeiten“."
+    : "Live-Ansicht – Schalter und gelb hinterlegte Felder sind bedienbar.";
+  gewaehltesElement = null;
+  leinwandZeichnen();
+};
+
+function leinwandZeichnen() {
+  const leinwand = $("leinwand");
+  const inhalt = $("leinwandInhalt");
+  const bearbeiten = $("bearbeitenModus").checked;
+  const seite = projekt.seiten[aktiveSeite];
+
+  // Seite immer vollständig einpassen – wie ein Bedienpanel
+  leinwand.style.height = Math.round(window.innerHeight * 0.62) + "px";
+  const flaecheB = leinwand.clientWidth || 800;
+  const flaecheH = leinwand.clientHeight || 500;
+  const skala = Math.min(flaecheB / LEINWAND_B, flaecheH / LEINWAND_H);
+  const randLinks = Math.max(0, (flaecheB - LEINWAND_B * skala) / 2);
+  const randOben = Math.max(0, (flaecheH - LEINWAND_H * skala) / 2);
+  inhalt.style.width = flaecheB + "px";
+  inhalt.style.height = flaecheH + "px";
+  inhalt.innerHTML = "";
+  if (!seite) return;
+
+  seite.elemente.forEach(el => {
+    const d = document.createElement("div");
+    d.className = "element" + (bearbeiten ? " bearbeiten" : "");
+    if (bearbeiten && gewaehltesElement === el.id) d.classList.add("gewaehlt");
+    d.style.left = (randLinks + el.x * skala) + "px";
+    d.style.top = (randOben + el.y * skala) + "px";
+    d.style.width = (el.breite * skala) + "px";
+    d.style.height = (el.hoehe * skala) + "px";
+
+    elementInhalt(d, el, skala, bearbeiten);
+
+    if (bearbeiten) {
+      d.title = el.typ + (el.symbolTyp && el.typ === "Symbol" ? " – " + el.symbolTyp : "");
+      ziehenAktivieren(d, el, skala, randLinks, randOben);
+    }
+    inhalt.appendChild(d);
+  });
+}
+
+function elementInhalt(d, el, skala, bearbeiten) {
+  if (el.typ === "Symbol") {
+    const c = document.createElement("canvas");
+    const b = Math.max(10, Math.round(el.breite * skala));
+    const h = Math.max(10, Math.round(el.hoehe * skala));
+    const dpr = window.devicePixelRatio || 1;
+    c.width = b * dpr; c.height = h * dpr;
+    d.appendChild(c);
+    const ctx = c.getContext("2d");
+    ctx.scale(dpr, dpr);
+    zeichneSymbol(ctx, el, werte[el.tagName], b, h);
+    return;
+  }
+
+  if (el.typ === "Text") {
+    const t = document.createElement("div");
+    t.className = "textfeld";
+    t.textContent = el.text || "Text";
+    t.style.fontSize = (el.schriftGroesse * skala) + "px";
+    d.appendChild(t);
+    return;
+  }
+
+  if (el.typ === "Variable") {
+    const f = document.createElement("div");
+    f.className = "varfeld" + (el.editierbar ? " editierbar" : "");
+    f.style.fontSize = (el.schriftGroesse * skala) + "px";
+    f.textContent = symbolMesstext(werte[el.tagName], el);
+    if (!bearbeiten && el.editierbar) {
+      f.onclick = () => {
+        const tag = projekt.tags.find(t => t.name === el.tagName);
+        if (!tag) { melde("Tag '" + el.tagName + "' nicht gefunden."); return; }
+        const neu = prompt("Neuer Wert für „" + el.tagName + "“:", werte[el.tagName] ?? "");
+        if (neu !== null) tagSchreiben(tag, neu, "Messwertfeld");
+      };
+    }
+    d.appendChild(f);
+    return;
+  }
+
+  if (el.typ === "Button") {
+    const k = document.createElement("button");
+    k.textContent = el.text || "Schalter";
+    k.style.fontSize = (el.schriftGroesse * skala) + "px";
+    k.disabled = bearbeiten;
+    k.onclick = () => {
+      const tag = projekt.tags.find(t => t.name === el.tagName);
+      if (!tag) { melde("Tag '" + el.tagName + "' nicht gefunden."); return; }
+      tagSchreiben(tag, el.schreibWert, "Schalter „" + el.text + "“");
+    };
+    d.appendChild(k);
+    return;
+  }
+
+  // Seitenwechsel
+  const k = document.createElement("button");
+  k.textContent = el.text || "Weiter";
+  k.style.fontSize = (el.schriftGroesse * skala) + "px";
+  k.style.background = "#dbe6f3";
+  k.disabled = bearbeiten;
+  k.onclick = () => {
+    const i = projekt.seiten.findIndex(s => s.name === el.zielSeite);
+    if (i < 0) { melde("Seite „" + el.zielSeite + "“ gibt es nicht (mehr)."); return; }
+    aktiveSeite = i; gewaehltesElement = null;
+    seitenLeisteAufbauen(); leinwandZeichnen();
+  };
+  d.appendChild(k);
+}
+
+function ziehenAktivieren(d, el, skala, randLinks, randOben) {
+  d.addEventListener("pointerdown", start => {
+    if (!$("bearbeitenModus").checked) return;
+    start.preventDefault();
+    d.setPointerCapture(start.pointerId);
+
+    gewaehltesElement = el.id;
+    $("leinwandInhalt").querySelectorAll(".element").forEach(x => x.classList.remove("gewaehlt"));
+    d.classList.add("gewaehlt");
+
+    const sx = start.clientX, sy = start.clientY;
+    const ux = el.x, uy = el.y;
+
+    const bewegen = ev => {
+      el.x = Math.max(0, ux + (ev.clientX - sx) / skala);
+      el.y = Math.max(0, uy + (ev.clientY - sy) / skala);
+      d.style.left = (randLinks + el.x * skala) + "px";
+      d.style.top = (randOben + el.y * skala) + "px";
+    };
+    const los = () => {
+      d.removeEventListener("pointermove", bewegen);
+      d.removeEventListener("pointerup", los);
+      d.removeEventListener("pointercancel", los);
+      sichern();
+    };
+    d.addEventListener("pointermove", bewegen);
+    d.addEventListener("pointerup", los);
+    d.addEventListener("pointercancel", los);
+  });
+}
+
+// ---------- Seiten verwalten ----------
+
+$("seiteNeu").onclick = () => {
+  const name = prompt("Name der neuen Seite:", "Übersicht " + (projekt.seiten.length + 1));
+  if (!name) return;
+  if (projekt.seiten.some(s => s.name === name.trim())) { melde("Diesen Namen gibt es schon."); return; }
+  projekt.seiten.push({ name: name.trim(), elemente: [] });
+  aktiveSeite = projekt.seiten.length - 1;
+  seitenLeisteAufbauen(); leinwandZeichnen(); sichern();
+};
+
+$("seiteUmbenennen").onclick = () => {
+  const seite = projekt.seiten[aktiveSeite];
+  const name = prompt("Neuer Name der Seite:", seite.name);
+  if (!name) return;
+  const neu = name.trim();
+  if (projekt.seiten.some((s, i) => i !== aktiveSeite && s.name === neu)) {
+    melde("Diesen Namen gibt es schon."); return;
+  }
+  const alt = seite.name;
+  // Sprungziele mitziehen, damit die Seitenwechsel weiter stimmen
+  projekt.seiten.forEach(s => s.elemente.forEach(e => {
+    if (e.typ === "Seitenwechsel" && e.zielSeite === alt) e.zielSeite = neu;
+  }));
+  seite.name = neu;
+  seitenLeisteAufbauen(); leinwandZeichnen(); sichern();
+};
+
+$("seiteLoeschen").onclick = () => {
+  if (projekt.seiten.length <= 1) { melde("Die letzte Seite kann nicht gelöscht werden."); return; }
+  const seite = projekt.seiten[aktiveSeite];
+  if (!confirm("Seite „" + seite.name + "“ mit " + seite.elemente.length + " Element(en) löschen?")) return;
+  projekt.seiten.splice(aktiveSeite, 1);
+  aktiveSeite = Math.min(aktiveSeite, projekt.seiten.length - 1);
+  gewaehltesElement = null;
+  seitenLeisteAufbauen(); leinwandZeichnen(); sichern();
+};
+
+// ---------- Elemente ----------
+
+document.querySelectorAll(".neuesElement").forEach(k => {
+  k.onclick = () => dialogOeffnen(neuesElement(k.dataset.typ), true);
+});
+
+function neuesElement(typ) {
+  const g = { id: "e" + Date.now() + Math.floor(Math.random() * 1000), typ,
+              x: 40, y: 40, text: "", schriftGroesse: 22, symbolTyp: "Motor",
+              tagName: "", einheit: "", nachkommastellen: 1, editierbar: false,
+              minWert: 0, maxWert: 100, sollwert: 40, hysterese: 2,
+              schreibWert: "True", zielSeite: projekt.seiten[0]?.name ?? "" };
+  if (typ === "Symbol")        { g.breite = 130; g.hoehe = 130; }
+  else if (typ === "Text")     { g.breite = 220; g.hoehe = 50; g.text = "Neuer Text"; }
+  else if (typ === "Variable") { g.breite = 220; g.hoehe = 70; }
+  else if (typ === "Button")   { g.breite = 200; g.hoehe = 70; g.text = "Start"; g.schriftGroesse = 18; }
+  else                         { g.breite = 200; g.hoehe = 70; g.text = "Weiter"; g.schriftGroesse = 18; }
+  return g;
+}
+
+$("elementBearbeiten").onclick = () => {
+  if (!gewaehltesElement) { melde("Erst ein Element antippen."); return; }
+  const el = projekt.seiten[aktiveSeite].elemente.find(e => e.id === gewaehltesElement);
+  if (el) dialogOeffnen(el, false);
+};
+
+$("elementLoeschen").onclick = () => {
+  if (!gewaehltesElement) { melde("Erst ein Element antippen."); return; }
+  const liste = projekt.seiten[aktiveSeite].elemente;
+  const i = liste.findIndex(e => e.id === gewaehltesElement);
+  if (i >= 0) liste.splice(i, 1);
+  gewaehltesElement = null;
+  leinwandZeichnen(); sichern();
+};
+
+// ===================== Elementdialog =====================
+
+let dialogEl = null, dialogNeu = false;
+
+function dialogOeffnen(el, istNeu) {
+  dialogEl = JSON.parse(JSON.stringify(el));   // auf einer Kopie arbeiten
+  dialogNeu = istNeu;
+  dialogAufbauen();
+  $("dialogHintergrund").classList.add("offen");
+}
+
+function dialogSchliessen() {
+  $("dialogHintergrund").classList.remove("offen");
+  dialogEl = null;
+}
+
+function dialogUebernehmen() {
+  if (!dialogEl) return;
+  const liste = projekt.seiten[aktiveSeite].elemente;
+  if (dialogNeu) liste.push(dialogEl);
+  else {
+    const i = liste.findIndex(e => e.id === dialogEl.id);
+    if (i >= 0) liste[i] = dialogEl; else liste.push(dialogEl);
+  }
+  gewaehltesElement = dialogEl.id;
+  dialogSchliessen();
+  leinwandZeichnen();
+  sichern();
+}
+
+$("dialogOk").onclick = dialogUebernehmen;
+$("dialogOk2").onclick = dialogUebernehmen;
+$("dialogAbbrechen").onclick = dialogSchliessen;
+$("dialogAbbrechen2").onclick = dialogSchliessen;
+
+function dialogAufbauen() {
+  const el = dialogEl;
+  const istSymbol = el.typ === "Symbol";
+  const istMess = istSymbol && SYMBOLE_MIT_MESSWERT.includes(el.symbolTyp);
+  const istRegler = istSymbol && el.symbolTyp === "Temperaturregelung";
+
+  $("dialogTitel").textContent = ({
+    Symbol: "Symbol einstellen", Text: "Textfeld einstellen",
+    Variable: "Messwertfeld einstellen", Button: "Schalter einstellen"
+  })[el.typ] || "Seitenwechsel einstellen";
+
+  const inhalt = $("dialogInhalt");
+  inhalt.innerHTML = "";
+
+  const feld = (beschriftung, bau) => {
+    const d = document.createElement("div");
+    d.className = "feld";
+    const l = document.createElement("label");
+    l.textContent = beschriftung;
+    d.appendChild(l);
+    d.appendChild(bau());
+    inhalt.appendChild(d);
+    return d;
+  };
+
+  const eingabe = (schluessel, typ, beiAenderung) => {
+    const e = document.createElement("input");
+    e.type = typ || "text";
+    e.value = el[schluessel];
+    e.oninput = () => {
+      el[schluessel] = typ === "number" ? (parseFloat(e.value.replace(",", ".")) || 0) : e.value;
+      if (beiAenderung) beiAenderung();
+    };
+    return e;
+  };
+
+  const auswahl = (werteListe, aktuell, beiWahl) => {
+    const s = document.createElement("select");
+    werteListe.forEach(w => {
+      const o = document.createElement("option");
+      o.textContent = w;
+      if (w === aktuell) o.selected = true;
+      s.appendChild(o);
+    });
+    s.onchange = () => beiWahl(s.value);
+    return s;
+  };
+
+  // ---------- Symbol: Vorschau und Raster ----------
+  if (istSymbol) {
+    const vorschau = document.createElement("div");
+    vorschau.id = "symbolVorschau";
+    const vc = document.createElement("canvas");
+    vc.width = 420; vc.height = 290;
+    vc.style.width = "210px"; vc.style.height = "145px";
+    vorschau.appendChild(vc);
+    inhalt.appendChild(vorschau);
+
+    const vorschauMalen = () => {
+      const ctx = vc.getContext("2d");
+      ctx.clearRect(0, 0, vc.width, vc.height);
+      const bsp = SYMBOLE_MIT_MESSWERT.includes(el.symbolTyp)
+        ? String((el.minWert + el.maxWert) / 2) : "True";
+      const echt = werte[el.tagName];
+      zeichneSymbol(ctx, el, echt !== undefined ? echt : bsp, vc.width, vc.height);
+    };
+    vorschauMalen();
+
+    SYMBOL_GRUPPEN.forEach(([gruppe, namen]) => {
+      const t = document.createElement("div");
+      t.className = "gruppentitel";
+      t.textContent = gruppe;
+      inhalt.appendChild(t);
+
+      const raster = document.createElement("div");
+      raster.className = "symbolraster";
+      namen.forEach(name => {
+        const kachel = document.createElement("div");
+        kachel.className = "kachel" + (el.symbolTyp === name ? " gewaehlt" : "");
+        const c = document.createElement("canvas");
+        c.width = 180; c.height = 124;
+        kachel.appendChild(c);
+        const s = document.createElement("span");
+        s.textContent = name;
+        kachel.appendChild(s);
+        zeichneSymbol(c.getContext("2d"),
+          { ...el, symbolTyp: name, einheit: "", nachkommastellen: 0 },
+          SYMBOLE_MIT_MESSWERT.includes(name) ? "65" : "True", 180, 124);
+        kachel.onclick = () => {
+          el.symbolTyp = name;
+          dialogAufbauen();
+          $("dialogInhalt").scrollTop = 0;
+        };
+        raster.appendChild(kachel);
+      });
+      inhalt.appendChild(raster);
+    });
+  }
+
+  if (["Text", "Button", "Seitenwechsel"].includes(el.typ))
+    feld("Beschriftung", () => eingabe("text"));
+
+  if (["Symbol", "Variable", "Button"].includes(el.typ)) {
+    const beschriftung = el.typ === "Button" ? "Tag, in den geschrieben wird"
+      : (el.typ === "Symbol" ? "Tag für Zustand/Messwert (optional)" : "Verknüpfter Tag");
+    feld(beschriftung, () => auswahl(
+      ["(keiner)"].concat(projekt.tags.map(t => t.name)),
+      el.tagName || "(keiner)",
+      w => { el.tagName = (w === "(keiner)") ? "" : w; }
+    ));
+  }
+
+  if (el.typ === "Variable" || istMess) {
+    const d = document.createElement("div");
+    d.className = "feld";
+    d.innerHTML = "<label>Einheit und Nachkommastellen</label>";
+    const paar = document.createElement("div");
+    paar.className = "paar";
+    paar.appendChild(eingabe("einheit"));
+    paar.appendChild(eingabe("nachkommastellen", "number"));
+    d.appendChild(paar);
+    inhalt.appendChild(d);
+  }
+
+  if (istMess) {
+    const d = document.createElement("div");
+    d.className = "feld";
+    d.innerHTML = "<label>Messbereich (Minimum / Maximum)</label>";
+    const paar = document.createElement("div");
+    paar.className = "paar";
+    paar.appendChild(eingabe("minWert", "number"));
+    paar.appendChild(eingabe("maxWert", "number"));
+    d.appendChild(paar);
+    inhalt.appendChild(d);
+  }
+
+  if (istRegler) {
+    const d = document.createElement("div");
+    d.className = "feld";
+    d.innerHTML = "<label>Sollwert und Hysterese</label>";
+    const paar = document.createElement("div");
+    paar.className = "paar";
+    paar.appendChild(eingabe("sollwert", "number"));
+    paar.appendChild(eingabe("hysterese", "number"));
+    d.appendChild(paar);
+    const hinweis = document.createElement("div");
+    hinweis.className = "hinweis";
+    hinweis.style.margin = "6px 0 0";
+    hinweis.textContent = "Reine Anzeige: unterhalb Sollwert minus halber Hysterese erscheint " +
+                          "„Heizen EIN“, oberhalb „Heizen AUS“. Geregelt wird in der SPS.";
+    d.appendChild(hinweis);
+    inhalt.appendChild(d);
+  }
+
+  if (el.typ === "Variable") {
+    const d = document.createElement("div");
+    d.className = "feld";
+    const l = document.createElement("label");
+    const c = document.createElement("input");
+    c.type = "checkbox"; c.checked = el.editierbar;
+    c.onchange = () => { el.editierbar = c.checked; };
+    l.style.fontWeight = "400";
+    l.appendChild(c);
+    l.appendChild(document.createTextNode(" Wert per Antippen veränderbar"));
+    d.appendChild(l);
+    inhalt.appendChild(d);
+  }
+
+  if (el.typ === "Button") feld("Wert, der geschrieben wird", () => eingabe("schreibWert"));
+
+  if (el.typ === "Seitenwechsel")
+    feld("Zielseite", () => auswahl(projekt.seiten.map(s => s.name), el.zielSeite,
+                                    w => { el.zielSeite = w; }));
+
+  if (!istSymbol) feld("Schriftgröße", () => eingabe("schriftGroesse", "number"));
+
+  const groesse = document.createElement("div");
+  groesse.className = "feld";
+  groesse.innerHTML = "<label>Größe auf der Seite (Breite / Höhe)</label>";
+  const paarG = document.createElement("div");
+  paarG.className = "paar";
+  paarG.appendChild(eingabe("breite", "number"));
+  paarG.appendChild(eingabe("hoehe", "number"));
+  groesse.appendChild(paarG);
+  const gh = document.createElement("div");
+  gh.className = "hinweis";
+  gh.style.margin = "6px 0 0";
+  gh.textContent = "Die Seite ist " + LEINWAND_B + " Einheiten breit und " + LEINWAND_H +
+                   " hoch – gleiche Maße wie in der Android-App.";
+  groesse.appendChild(gh);
+  inhalt.appendChild(groesse);
+}
+
+// ===================== Auswertung =====================
+
+let kurvenAuswahl = {};
+
+function kurvenlisteAufbauen() {
+  const liste = $("kurvenliste");
+  const vorhanden = new Set(projekt.tags.map(t => t.name));
+  liste.innerHTML = "";
+  projekt.tags.forEach((tag, i) => {
+    if (!(tag.name in kurvenAuswahl)) kurvenAuswahl[tag.name] = i < 3;
+    const l = document.createElement("label");
+    const h = document.createElement("input");
+    h.type = "checkbox"; h.checked = kurvenAuswahl[tag.name];
+    h.onchange = () => { kurvenAuswahl[tag.name] = h.checked; diagrammZeichnen(); };
+    const f = document.createElement("span");
+    f.className = "farbfeld";
+    f.style.background = FARBEN[i % FARBEN.length];
+    l.appendChild(h); l.appendChild(f);
+    l.appendChild(document.createTextNode(tag.name));
+    liste.appendChild(l);
+  });
+  Object.keys(kurvenAuswahl).forEach(n => { if (!vorhanden.has(n)) delete kurvenAuswahl[n]; });
+}
+
+function diagrammZeichnen() {
+  const c = $("diagramm");
+  const b = c.clientWidth, h = c.clientHeight;
+  if (b < 50 || h < 50) return;
+  c.width = b; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, b, h);
+  $("punkteInfo").textContent = verlauf.length + " Messpunkte";
+
+  const minuten = parseInt($("zeitraum").value);
+  const grenze = minuten ? Date.now() - minuten * 60000 : 0;
+  const punkte = verlauf.filter(p => p.t >= grenze);
+  const gewaehlt = projekt.tags.map((t, i) => ({ name: t.name, farbe: FARBEN[i % FARBEN.length] }))
+                               .filter(k => kurvenAuswahl[k.name]);
+
+  ctx.font = "12px 'Segoe UI', Arial";
+  if (punkte.length < 2 || gewaehlt.length === 0) {
+    ctx.fillStyle = "#667";
+    ctx.fillText(gewaehlt.length === 0 ? "Links Kurven anhaken."
+      : "Noch zu wenige Messpunkte – „alle 2 s“ oben einschalten.", 20, 30);
+    $("kennzahlen").textContent = "";
+    return;
+  }
+
+  const links = 62, rechts = b - 12, oben = 12, unten = h - 30;
+  let min = Infinity, max = -Infinity;
+  punkte.forEach(p => gewaehlt.forEach(k => {
+    const v = p.w[k.name];
+    if (v === undefined) return;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }));
+  if (min === Infinity) {
+    ctx.fillStyle = "#667";
+    ctx.fillText("Für die gewählten Kurven liegen keine Werte vor.", 20, 30);
+    $("kennzahlen").textContent = "";
+    return;
+  }
+  if (Math.abs(max - min) < 1e-9) { min -= 1; max += 1; }
+  else { const luft = (max - min) * .08; min -= luft; max += luft; }
+
+  const t0 = punkte[0].t, t1 = punkte[punkte.length - 1].t;
+  const spanne = Math.max(1, t1 - t0);
+  const X = t => links + (rechts - links) * ((t - t0) / spanne);
+  const Y = v => oben + (unten - oben) * (1 - (v - min) / (max - min));
+
+  ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#555"; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const wert = min + (max - min) * i / 4;
+    const y = Math.round(Y(wert)) + .5;
+    ctx.beginPath(); ctx.moveTo(links, y); ctx.lineTo(rechts, y); ctx.stroke();
+    ctx.fillText(wert.toFixed(1).replace(".", ","), 6, y + 4);
+  }
+  ctx.strokeStyle = "#1f2d3d";
+  ctx.beginPath();
+  ctx.moveTo(links + .5, oben); ctx.lineTo(links + .5, unten); ctx.lineTo(rechts, unten);
+  ctx.stroke();
+
+  const uhr = t => new Date(t).toLocaleTimeString("de-DE");
+  ctx.fillStyle = "#555";
+  ctx.fillText(uhr(t0), links, unten + 18);
+  ctx.fillText(uhr(t1), rechts - 56, unten + 18);
+
+  const kennzahlen = [];
+  gewaehlt.forEach(k => {
+    ctx.strokeStyle = k.farbe; ctx.lineWidth = 2;
+    ctx.beginPath();
+    let erster = true, kMin = Infinity, kMax = -Infinity, summe = 0, n = 0;
+    punkte.forEach(p => {
+      const v = p.w[k.name];
+      if (v === undefined) return;
+      const x = X(p.t), y = Y(v);
+      if (erster) { ctx.moveTo(x, y); erster = false; } else ctx.lineTo(x, y);
+      if (v < kMin) kMin = v;
+      if (v > kMax) kMax = v;
+      summe += v; n++;
+    });
+    ctx.stroke();
+    if (n) kennzahlen.push(k.name + ": min " + kMin.toFixed(2) +
+                           " · max " + kMax.toFixed(2) +
+                           " · Ø " + (summe / n).toFixed(2));
+  });
+  $("kennzahlen").textContent = kennzahlen.join("     ");
+}
+
+$("zeitraum").onchange = diagrammZeichnen;
+
+$("verlaufLoeschen").onclick = () => {
+  if (!confirm("Die gesamte Aufzeichnung verwerfen?")) return;
+  verlauf = []; diagrammZeichnen(); melde("Aufzeichnung gelöscht.");
+};
+
+$("csvExport").onclick = () => {
+  if (!verlauf.length) { melde("Es wurde noch nichts aufgezeichnet."); return; }
+  const spalten = [];
+  verlauf.forEach(p => Object.keys(p.w).forEach(n => { if (!spalten.includes(n)) spalten.push(n); }));
+  spalten.sort();
+  let text = "Zeitpunkt;" + spalten.join(";") + "\n";
+  verlauf.forEach(p => {
+    const d = new Date(p.t);
+    text += d.toLocaleDateString("de-DE") + " " + d.toLocaleTimeString("de-DE");
+    spalten.forEach(s => {
+      text += ";" + (p.w[s] === undefined ? "" : p.w[s].toFixed(3).replace(".", ","));
+    });
+    text += "\n";
+  });
+  const blob = new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const n = new Date();
+  a.download = "Auswertung_" + n.toISOString().slice(0, 10) + "_" +
+               String(n.getHours()).padStart(2, "0") + String(n.getMinutes()).padStart(2, "0") + ".csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  melde(verlauf.length + " Messpunkte gespeichert.");
+};
+
+$("csvImport").onclick = () => $("csvDatei").click();
+$("csvDatei").onchange = ev => {
+  const datei = ev.target.files[0];
+  ev.target.value = "";
+  if (!datei) return;
+  const leser = new FileReader();
+  leser.onload = () => {
+    try {
+      const zeilen = String(leser.result).replace(/^﻿/, "").split(/\r?\n/).filter(z => z.trim());
+      if (zeilen.length < 2) { melde("Die Datei enthält keine Datenzeilen."); return; }
+      const spalten = zeilen[0].split(";").map(s => s.trim()).slice(1);
+      const neu = [];
+      for (let i = 1; i < zeilen.length; i++) {
+        const f = zeilen[i].split(";");
+        const t = zeitAusText(f[0]);
+        if (!t) continue;
+        const punkt = { t, w: {} };
+        spalten.forEach((name, j) => {
+          const roh = (f[j + 1] || "").trim().replace(",", ".");
+          if (roh === "") return;
+          const z = parseFloat(roh);
+          if (!isNaN(z)) punkt.w[name] = z;
+        });
+        if (Object.keys(punkt.w).length) neu.push(punkt);
+      }
+      if (!neu.length) { melde("Aus der Datei ließen sich keine Messwerte lesen."); return; }
+      verlauf = neu;
+      spalten.forEach((name, i) => {
+        if (!projekt.tags.some(t => t.name === name))
+          projekt.tags.push({ name, db: 0, offset: 0, bit: 0, typ: "Real" });
+        if (!(name in kurvenAuswahl)) kurvenAuswahl[name] = i < 3;
+      });
+      tagsTabelleAufbauen(); kurvenlisteAufbauen();
+      $("zeitraum").value = "0";
+      $("aufzeichnung").checked = false;
+      diagrammZeichnen();
+      melde(neu.length + " Messpunkte geladen (Aufzeichnung pausiert).");
+    } catch (e) {
+      melde("CSV konnte nicht gelesen werden: " + e.message);
+    }
+  };
+  leser.readAsText(datei);
+};
+
+/** Erwartet "TT.MM.JJJJ HH:MM:SS" wie beim eigenen Export. */
+function zeitAusText(text) {
+  if (!text) return null;
+  const teile = String(text).trim().split(" ");
+  const d = (teile[0] || "").split(".");
+  const u = (teile[1] || "0:0:0").split(":");
+  if (d.length !== 3) return null;
+  const z = new Date(+d[2], +d[1] - 1, +d[0], +u[0] || 0, +u[1] || 0, +u[2] || 0);
+  return isNaN(z.getTime()) ? null : z.getTime();
+}
+
+// ===================== Ansicht =====================
+
+function ansichtAnwenden() {
+  const modus = $("ansichtModus").value;
+  const handy = modus === "handy" || (modus === "auto" && window.innerWidth < 820);
+  document.body.classList.toggle("handy", handy);
+  try { localStorage.setItem("spsmonitor.ansicht", modus); } catch (e) {}
+  leinwandZeichnen();
+  diagrammZeichnen();
+}
+$("ansichtModus").onchange = ansichtAnwenden;
+
+let groesseTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(groesseTimer);
+  groesseTimer = setTimeout(ansichtAnwenden, 150);
+});
+
+// ===================== Start =====================
+
+$("erneutVerbinden").onclick = async () => {
+  brueckeSetzen($("brueckeAdresse").value);
+  melde("Verbindung zur Brücke wird gesucht …");
+  await brueckePruefen();
+  if (brueckeDa) {
+    await projektHolen();
+    $("ip").value = projekt.ip;
+    $("rack").value = projekt.rack;
+    $("slot").value = projekt.slot;
+    allesNeuAufbauen();
+    melde("Brücke gefunden.");
+  } else {
+    melde("Unter " + BRUECKE + " meldet sich keine Brücke.");
+  }
+};
+
+(async function start() {
+  $("version").textContent = "v" + VERSION;
+  $("brueckeAdresse").value = BRUECKE.replace(/^https?:\/\//, "");
+  try {
+    const m = localStorage.getItem("spsmonitor.ansicht");
+    if (m) $("ansichtModus").value = m;
+  } catch (e) {}
+
+  // Standard: zusammen schließen, wenn die Brücke auf diesem Rechner läuft.
+  let mit = true;
+  try {
+    const gemerkt = localStorage.getItem(MITBEENDEN_SPEICHER);
+    if (gemerkt) mit = gemerkt === "ja";
+  } catch (e) {}
+  $("brueckeMitBeenden").checked = mit;
+
+  // Zuerst das Lebenszeichen – nach einem Neuladen zählt die Brücke sonst
+  // weiter herunter.
+  await brueckePruefen();
+
+  await projektHolen();
+  $("ip").value = projekt.ip;
+  $("rack").value = projekt.rack;
+  $("slot").value = projekt.slot;
+  allesNeuAufbauen();
+  ansichtAnwenden();
+
+  brueckeAnzeigeAktualisieren();
+  pulsStarten();
+})();
+</script>
+</body>
+</html>

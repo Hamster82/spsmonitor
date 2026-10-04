@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SpsBruecke</RootNamespace>
+    <AssemblyName>SpsBruecke</AssemblyName>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Eigenständige Single-File-EXE: der Zielrechner braucht kein .NET. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Sharp7" Version="1.1.84" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Die Oberfläche liegt als normale Datei neben der EXE und kann
+         jederzeit mit einem Texteditor angepasst werden. -->
+    <None Update="oberflaeche.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
