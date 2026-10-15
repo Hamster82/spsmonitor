@@ -9,7 +9,20 @@ namespace SpsBruecke
 {
     public static class Program
     {
-        public const string Version = "1.4";
+        public const string Version = "1.5";
+
+        // Obergrenze für den Anfragekörper. Schützt vor einer Anfrage, die über
+        // eine riesige Content-Length-Angabe den Speicher erschöpfen will.
+        private const int MaxKoerper = 4 * 1024 * 1024;
+
+        // Zufälliges Sitzungs-Token, bei jedem Start neu. Es steht nur in der
+        // Seite, die die Brücke selbst ausliefert. Schreibende Zugriffe müssen
+        // es mitschicken; dadurch kann keine fremde Webseite im Browser des
+        // Bedieners die Brücke fernsteuern (sie kennt das Token nicht, und ein
+        // eigenes Kopffeld erzwingt eine CORS-Vorabfrage, die ohne Freigabe
+        // scheitert).
+        private static readonly string Token =
+            Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
 
         private static readonly PlcService Plc = new();
         private static readonly JsonSerializerOptions JsonOptionen = new()
@@ -328,19 +341,27 @@ namespace SpsBruecke
 
                     bool vomEigenenRechner = IstEigenerRechner(client);
 
-                    var (methode, pfad, koerper) = AnfrageLesen(stream);
+                    var (methode, pfad, koerper, meta) = AnfrageLesen(stream);
                     if (methode == null || pfad == null)
                         return;
 
-                    // Preflight des Browsers (kommt, wenn die HTML-Datei direkt per
-                    // Doppelklick geöffnet wurde statt über die Brücke).
+                    // Anfragekörper zu groß: nicht einlesen, sondern abweisen.
+                    if (meta.ZuGross)
+                    {
+                        AntwortSenden(stream, 413, "text/plain; charset=utf-8",
+                            Encoding.UTF8.GetBytes("Anfrage zu groß"));
+                        return;
+                    }
+
+                    // Preflight des Browsers. Ohne CORS-Freigabe (siehe AntwortSenden)
+                    // kommt eine fremde Webseite hier nicht weiter.
                     if (methode == "OPTIONS")
                     {
                         AntwortSenden(stream, 204, "text/plain", Array.Empty<byte>());
                         return;
                     }
 
-                    Route(stream, methode, pfad, koerper, vomEigenenRechner);
+                    Route(stream, methode, pfad, koerper, vomEigenenRechner, meta);
                 }
             }
             catch (Exception ex)
@@ -365,15 +386,24 @@ namespace SpsBruecke
             return false;
         }
 
-        private static (string? Methode, string? Pfad, string Koerper) AnfrageLesen(NetworkStream stream)
+        /// <summary>Begleitangaben einer Anfrage, die über Methode/Pfad/Körper hinausgehen.</summary>
+        private sealed class AnfrageMeta
         {
+            public string? Token;      // Wert des Kopffelds X-SpsBruecke-Token
+            public bool HatOrigin;     // kam ein Origin-Kopf mit (Browser, fremde Seite)?
+            public bool ZuGross;       // Content-Length über der Obergrenze
+        }
+
+        private static (string? Methode, string? Pfad, string Koerper, AnfrageMeta Meta) AnfrageLesen(NetworkStream stream)
+        {
+            var meta = new AnfrageMeta();
             var kopfBytes = new List<byte>();
 
             // Kopfzeilen zeichenweise bis zur Leerzeile lesen.
             while (true)
             {
                 int b = stream.ReadByte();
-                if (b < 0) return (null, null, "");
+                if (b < 0) return (null, null, "", meta);
                 kopfBytes.Add((byte)b);
 
                 if (kopfBytes.Count >= 4)
@@ -384,13 +414,13 @@ namespace SpsBruecke
                         break;
                 }
 
-                if (kopfBytes.Count > 64 * 1024) return (null, null, ""); // Schutz gegen Unsinn
+                if (kopfBytes.Count > 64 * 1024) return (null, null, "", meta); // Schutz gegen Unsinn
             }
 
             string kopf = Encoding.UTF8.GetString(kopfBytes.ToArray());
             var zeilen = kopf.Split("\r\n");
             var ersteTeile = zeilen[0].Split(' ');
-            if (ersteTeile.Length < 2) return (null, null, "");
+            if (ersteTeile.Length < 2) return (null, null, "", meta);
 
             string methode = ersteTeile[0];
             string pfad = ersteTeile[1];
@@ -400,6 +430,17 @@ namespace SpsBruecke
             {
                 if (zeile.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                     int.TryParse(zeile.Substring("Content-Length:".Length).Trim(), out laenge);
+                else if (zeile.StartsWith("X-SpsBruecke-Token:", StringComparison.OrdinalIgnoreCase))
+                    meta.Token = zeile.Substring("X-SpsBruecke-Token:".Length).Trim();
+                else if (zeile.StartsWith("Origin:", StringComparison.OrdinalIgnoreCase))
+                    meta.HatOrigin = true;
+            }
+
+            // Zu großer Körper: gar nicht erst einlesen, nur melden.
+            if (laenge > MaxKoerper)
+            {
+                meta.ZuGross = true;
+                return (methode, pfad, "", meta);
             }
 
             string koerper = "";
@@ -416,7 +457,7 @@ namespace SpsBruecke
                 koerper = Encoding.UTF8.GetString(puffer, 0, gelesen);
             }
 
-            return (methode, pfad, koerper);
+            return (methode, pfad, koerper, meta);
         }
 
         private static void AntwortSenden(NetworkStream stream, int status, string inhaltsTyp, byte[] koerper)
@@ -435,10 +476,14 @@ namespace SpsBruecke
             kopf.Append($"HTTP/1.1 {status} {statusText}\r\n");
             kopf.Append($"Content-Type: {inhaltsTyp}\r\n");
             kopf.Append($"Content-Length: {koerper.Length}\r\n");
-            // Erlaubt auch das direkte Öffnen der HTML-Datei per Doppelklick.
-            kopf.Append("Access-Control-Allow-Origin: *\r\n");
-            kopf.Append("Access-Control-Allow-Headers: Content-Type\r\n");
-            kopf.Append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
+            // Bewusst KEINE CORS-Freigabe (kein Access-Control-Allow-Origin).
+            // Die Oberfläche wird von der Brücke selbst ausgeliefert und ist
+            // damit gleicher Herkunft – sie braucht keine Freigabe. Eine fremde
+            // Webseite im selben Browser bekommt dadurch keine Antwort und kann
+            // über ein eigenes Kopffeld (Token) auch nichts Schreibendes auslösen.
+            kopf.Append("X-Content-Type-Options: nosniff\r\n");
+            kopf.Append("X-Frame-Options: DENY\r\n");
+            kopf.Append("Referrer-Policy: no-referrer\r\n");
             kopf.Append("Cache-Control: no-store\r\n");
             kopf.Append("Connection: close\r\n");
             kopf.Append("\r\n");
@@ -456,13 +501,36 @@ namespace SpsBruecke
 
         // ===================== Routen =====================
 
+        /// <summary>Prüft das Sitzungs-Token zeitkonstant.</summary>
+        private static bool TokenStimmt(AnfrageMeta meta) =>
+            meta.Token != null && meta.Token.Length == Token.Length &&
+            System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Encoding.ASCII.GetBytes(meta.Token), Encoding.ASCII.GetBytes(Token));
+
         private static void Route(NetworkStream stream, string methode, string pfad, string koerper,
-                                  bool vomEigenenRechner)
+                                  bool vomEigenenRechner, AnfrageMeta meta)
         {
             // Query-Teil abschneiden
             int frage = pfad.IndexOf('?');
             string abfrage = frage >= 0 ? pfad.Substring(frage + 1) : "";
             if (frage >= 0) pfad = pfad.Substring(0, frage);
+
+            // Schreibende bzw. steuernde Routen brauchen das Sitzungs-Token.
+            // Es steht nur in der Seite, die die Brücke selbst ausliefert, also
+            // kann weder eine fremde Webseite im Browser noch eine lose
+            // geöffnete HTML-Datei (file://) ungefragt in die SPS schreiben.
+            bool brauchtToken = pfad is "/api/verbinden" or "/api/trennen"
+                or "/api/schreiben" or "/api/beenden"
+                || (pfad is "/api/projekt" or "/api/konfiguration" && methode == "POST");
+
+            if (brauchtToken && !TokenStimmt(meta))
+            {
+                Console.WriteLine($"  Abgewiesen ({pfad}): kein gültiges Token" +
+                                  (meta.HatOrigin ? " (fremde Herkunft)" : ""));
+                AntwortSenden(stream, 403, "application/json; charset=utf-8",
+                    Encoding.UTF8.GetBytes("{\"ok\":false,\"fehler\":\"Nicht berechtigt - Oberfläche über die Brücke öffnen.\"}"));
+                return;
+            }
 
             switch (pfad)
             {
@@ -624,7 +692,16 @@ namespace SpsBruecke
                     "oberflaeche.html wurde nicht gefunden. Sie muss im selben Ordner wie SpsBruecke.exe liegen."));
                 return;
             }
-            AntwortSenden(stream, 200, "text/html; charset=utf-8", File.ReadAllBytes(HtmlDatei));
+
+            // Das Sitzungs-Token in die ausgelieferte Seite einsetzen. Nur diese
+            // von der Brücke gelieferte Seite erhält es; eine per Doppelklick
+            // geöffnete Datei (file://) oder eine fremde Webseite bekommt es nie.
+            // Nur das <meta>-Attribut ersetzen, nicht den gleichnamigen
+            // Vergleichswert im Skript - und so den Skript-Hash der CSP
+            // unangetastet lassen.
+            string html = File.ReadAllText(HtmlDatei, Encoding.UTF8);
+            html = html.Replace("content=\"__SPS_TOKEN__\"", $"content=\"{Token}\"");
+            AntwortSenden(stream, 200, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html));
         }
 
         private class VerbindenAnfrage

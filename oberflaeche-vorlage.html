@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Inhaltssicherheits-Richtlinie: nur das eine eingebaute Skript (per Hash)
+     darf laufen, keine externen Quellen, Verbindungen nur zur eigenen Brücke.
+     „require-trusted-types-for" erzwingt, dass HTML nur über die unten
+     definierte Richtlinie ins Dokument gelangt. bauen.py setzt den Hash ein. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src '__CSP_SCRIPT_HASH__'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types spsmonitor">
+<meta name="referrer" content="no-referrer">
+<!-- Sitzungs-Token: nur vorhanden, wenn die Seite von der Brücke geliefert
+     wurde. Beim Doppelklick (file://) bleibt der Platzhalter stehen. -->
+<meta name="sps-token" content="__SPS_TOKEN__">
 <title>SPS Monitor</title>
 <style>
   :root {
@@ -322,7 +331,37 @@
    Liest und schreibt dasselbe projekt.json wie die Android-App.
    =================================================================== */
 
-const VERSION = "1.4";
+const VERSION = "1.5";
+
+// ===================== Sicherheit: Trusted Types + Token =====================
+
+// Eine einzige HTML-Richtlinie für die wenigen Stellen, die feste HTML-Schnipsel
+// setzen. Sie lässt nur unbedenkliches Markup durch: kein <script>, keine
+// javascript:-Verweise, keine on…=-Ereignisbehandler. Angreiferdaten werden
+// ohnehin nie hierher geleitet (sie gehen über textContent), die Richtlinie ist
+// die zweite Sicherung und fängt künftige Fehler ab.
+const TT = (window.trustedTypes && window.trustedTypes.createPolicy)
+  ? window.trustedTypes.createPolicy("spsmonitor", {
+      createHTML: s => {
+        const t = String(s);
+        if (/<\s*script/i.test(t) || /javascript:/i.test(t) || /\son\w+\s*=/i.test(t))
+          throw new Error("HTML abgewiesen");
+        return t;
+      }
+    })
+  : null;
+
+/** Setzt festes HTML über die Richtlinie (oder direkt, falls der Browser keine
+    Trusted Types kennt). Nur mit Konstanten aufrufen, nie mit fremden Daten. */
+function htmlSetzen(el, s) { el.innerHTML = TT ? TT.createHTML(s) : s; }
+
+// Sitzungs-Token aus dem <meta>-Tag. Es ist nur gesetzt, wenn die Seite von der
+// Brücke ausgeliefert wurde; dann darf sie schreibende Zugriffe auslösen.
+const TOKEN = (function () {
+  const m = document.querySelector('meta[name="sps-token"]');
+  const w = m ? m.getAttribute("content") : "";
+  return (w && w !== "__SPS_TOKEN__") ? w : "";
+})();
 
 /*SYMBOLE_HIER*/
 
@@ -344,23 +383,38 @@ const PULS_MS = 4000;
 
 // Wird die Seite von der Brücke geliefert, ist deren Adresse die eigene.
 // Beim Doppelklick auf die Datei greift die zuletzt benutzte, sonst localhost.
+/** Prüft eine Adresse und gibt den sauberen Ursprung zurück (oder null).
+    Nur http/https, nur Host und Port – kein Pfad, keine Sonderzeichen. So
+    können weder ein unerwartetes Schema (javascript:, data:) noch
+    HTML-Sonderzeichen über die Adresse ins Programm gelangen. */
+function adressePruefen(eingabe) {
+  let a = (eingabe || "").trim();
+  if (!a) return null;
+  if (!/^https?:\/\//i.test(a)) a = "http://" + a;
+  let u;
+  try { u = new URL(a); } catch (e) { return null; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  if ((u.pathname && u.pathname !== "/") || u.search || u.hash) return null;
+  return u.origin;   // normalisiert, enthält keine < > " ' mehr
+}
+
 let BRUECKE = (function () {
   if (location.protocol.startsWith("http")) return location.origin;
   try {
-    const gemerkt = localStorage.getItem(ADRESS_SPEICHER);
+    const gemerkt = adressePruefen(localStorage.getItem(ADRESS_SPEICHER));
     if (gemerkt) return gemerkt;
   } catch (e) { /* privater Modus */ }
   return "http://localhost:8080";
 })();
 
-/** Nimmt "localhost:8081", "192.168.0.5:8080" oder eine volle Adresse an. */
+/** Nimmt "localhost:8081", "192.168.0.5:8080" oder eine volle Adresse an.
+    Gibt true zurück, wenn die Adresse gültig war. */
 function brueckeSetzen(eingabe) {
-  let a = (eingabe || "").trim();
-  if (!a) return;
-  if (!/^https?:\/\//i.test(a)) a = "http://" + a;
-  a = a.replace(/\/+$/, "");
-  BRUECKE = a;
-  try { localStorage.setItem(ADRESS_SPEICHER, a); } catch (e) {}
+  const ursprung = adressePruefen(eingabe);
+  if (!ursprung) { melde("Keine gültige Adresse (nur Host und Port, z. B. 192.168.0.50:8080)."); return false; }
+  BRUECKE = ursprung;
+  try { localStorage.setItem(ADRESS_SPEICHER, ursprung); } catch (e) {}
+  return true;
 }
 
 const FARBEN = ["#1f5f9e","#e8590c","#2e9e4b","#8e44ad","#c9a227",
@@ -370,7 +424,9 @@ const $ = id => document.getElementById(id);
 const melde = t => { $("meldung").textContent = t || ""; };
 
 let projekt = leeresProjekt();
-let werte = {};
+// Ohne Prototyp: ein Tag namens "toString"/"constructor" aus einer Datei kann
+// so keine geerbten Funktionen vortäuschen, wo ein Messwert stehen soll.
+let werte = Object.create(null);
 let verlauf = [];
 let aktiveSeite = 0;
 let gewaehltesElement = null;
@@ -398,124 +454,162 @@ function leeresProjekt() {
   };
 }
 
-/** Macht aus beliebigen Eingangsdaten ein vollständiges Projekt. */
+// Grenzen für geladene Projekte. Ein präpariertes oder fehlerhaftes
+// projekt.json soll die Oberfläche weder lahmlegen noch unsinnige Adressen an
+// die SPS schicken. Alles wird auf gültige Bereiche geklemmt und in der Menge
+// begrenzt.
+const MAX_TAGS = 500, MAX_SEITEN = 50, MAX_ELEMENTE = 300, MAX_TEXT = 200;
+const TAG_TYPEN = ["Bool", "Byte", "Int", "DInt", "Real"];
+const ELEMENT_TYPEN = ["Symbol", "Text", "Variable", "Button", "Seitenwechsel"];
+
+function klemme(wert, lo, hi, standard) {
+  const n = parseFloat(wert);
+  if (isNaN(n)) return standard;
+  return Math.min(hi, Math.max(lo, n));
+}
+function ganz(wert, lo, hi, standard) { return Math.round(klemme(wert, lo, hi, standard)); }
+function kurz(wert, max) { return String(wert ?? "").slice(0, max); }
+
+/** Macht aus beliebigen Eingangsdaten ein vollständiges Projekt.
+    Baut bewusst ein frisches Objekt mit festen Feldern (keine fremden
+    Schlüssel) und klemmt jeden Wert auf einen gültigen Bereich. */
 function projektAusDaten(d) {
   if (!d || typeof d !== "object") return null;
   const p = leeresProjekt();
 
-  if (typeof d.ip === "string") p.ip = d.ip;
-  if (d.rack !== undefined) p.rack = parseInt(d.rack) || 0;
-  if (d.slot !== undefined) p.slot = parseInt(d.slot) || 2;
+  if (typeof d.ip === "string") p.ip = kurz(d.ip, 40);
+  if (d.rack !== undefined) p.rack = ganz(d.rack, 0, 7, 0);
+  if (d.slot !== undefined) p.slot = ganz(d.slot, 0, 31, 2);
 
   if (Array.isArray(d.tags) && d.tags.length) {
-    p.tags = d.tags.map(t => ({
-      // Ältere Dateien hatten große Anfangsbuchstaben
-      name: t.name ?? t.Name ?? "",
-      db: parseInt(t.db ?? t.Db ?? 1) || 0,
-      offset: parseInt(t.offset ?? t.Offset ?? 0) || 0,
-      bit: parseInt(t.bit ?? t.Bit ?? 0) || 0,
-      typ: t.typ ?? t.Typ ?? "Real"
-    }));
+    p.tags = d.tags.slice(0, MAX_TAGS).map(t => {
+      const typ = t.typ ?? t.Typ ?? "Real";
+      // Reine Anzeigekurven (db ausdrücklich null) behalten keine Adresse und
+      // bleiben nicht beschreibbar.
+      const nurAnzeige = (t.db === null) || t.nurAnzeige === true;
+      return {
+        // Ältere Dateien hatten große Anfangsbuchstaben
+        name: kurz(t.name ?? t.Name ?? "", 60),
+        db: nurAnzeige ? null : ganz(t.db ?? t.Db ?? 1, 0, 65535, 0),
+        offset: ganz(t.offset ?? t.Offset ?? 0, 0, 65535, 0),
+        bit: ganz(t.bit ?? t.Bit ?? 0, 0, 7, 0),
+        typ: TAG_TYPEN.includes(typ) ? typ : "Real",
+        nurAnzeige: nurAnzeige
+      };
+    });
   }
 
   const rohSeiten = Array.isArray(d.seiten) ? d.seiten
                   : (Array.isArray(d.Seiten) ? d.Seiten : null);
   if (rohSeiten && rohSeiten.length) {
-    p.seiten = rohSeiten.map(s => ({
-      name: s.name ?? s.Name ?? "Übersicht",
-      elemente: (s.elemente ?? s.Elemente ?? []).map(elementAusDaten)
+    p.seiten = rohSeiten.slice(0, MAX_SEITEN).map(s => ({
+      name: kurz(s.name ?? s.Name ?? "Übersicht", 60),
+      elemente: (s.elemente ?? s.Elemente ?? []).slice(0, MAX_ELEMENTE).map(elementAusDaten)
     }));
   } else if (Array.isArray(d.elemente)) {
     // Ganz alte Fassung: nur eine Liste von Elementen
-    p.seiten = [{ name: "Übersicht 1", elemente: d.elemente.map(elementAusDaten) }];
+    p.seiten = [{ name: "Übersicht 1",
+                  elemente: d.elemente.slice(0, MAX_ELEMENTE).map(elementAusDaten) }];
   }
+  if (!p.seiten.length) p.seiten = [{ name: "Übersicht 1", elemente: [] }];
   return p;
 }
 
 function elementAusDaten(e) {
-  const z = (a, b, s) => { const v = a ?? b; const n = parseFloat(v); return isNaN(n) ? s : n; };
+  const typ = e.typ ?? e.Typ ?? "Symbol";
+  const symbolTyp = e.symbolTyp ?? e.SymbolTyp ?? "Motor";
   return {
-    id: e.id ?? e.Id ?? ("e" + Math.random().toString(36).slice(2)),
-    typ: e.typ ?? e.Typ ?? "Symbol",
-    x: z(e.x, e.X, 40), y: z(e.y, e.Y, 40),
-    breite: z(e.breite, e.Breite, 130), hoehe: z(e.hoehe, e.Hoehe, 130),
-    text: e.text ?? e.Text ?? "",
-    schriftGroesse: z(e.schriftGroesse, e.SchriftGroesse, 15),
-    symbolTyp: e.symbolTyp ?? e.SymbolTyp ?? "Motor",
-    tagName: e.tagName ?? e.TagName ?? "",
-    einheit: e.einheit ?? e.Einheit ?? "",
-    nachkommastellen: Math.round(z(e.nachkommastellen, e.Nachkommastellen, 1)),
+    id: kurz(e.id ?? e.Id ?? ("e" + Math.random().toString(36).slice(2)), 40),
+    typ: ELEMENT_TYPEN.includes(typ) ? typ : "Text",
+    x: klemme(e.x ?? e.X, 0, LEINWAND_B, 40),
+    y: klemme(e.y ?? e.Y, 0, LEINWAND_H, 40),
+    breite: klemme(e.breite ?? e.Breite, 4, LEINWAND_B, 130),
+    hoehe: klemme(e.hoehe ?? e.Hoehe, 4, LEINWAND_H, 130),
+    text: kurz(e.text ?? e.Text ?? "", MAX_TEXT),
+    schriftGroesse: klemme(e.schriftGroesse ?? e.SchriftGroesse, 4, 200, 15),
+    symbolTyp: (typeof SYMBOLE_ALLE !== "undefined" && SYMBOLE_ALLE.includes(symbolTyp))
+               ? symbolTyp : "Motor",
+    tagName: kurz(e.tagName ?? e.TagName ?? "", 60),
+    einheit: kurz(e.einheit ?? e.Einheit ?? "", 16),
+    nachkommastellen: ganz(e.nachkommastellen ?? e.Nachkommastellen, 0, 6, 1),
     editierbar: !!(e.editierbar ?? e.Editierbar ?? false),
-    minWert: z(e.minWert, e.MinWert, 0), maxWert: z(e.maxWert, e.MaxWert, 100),
-    sollwert: z(e.sollwert, e.Sollwert, 40), hysterese: z(e.hysterese, e.Hysterese, 2),
-    schreibWert: e.schreibWert ?? e.SchreibWert ?? "True",
-    zielSeite: e.zielSeite ?? e.ZielSeite ?? ""
+    minWert: klemme(e.minWert ?? e.MinWert, -1e9, 1e9, 0),
+    maxWert: klemme(e.maxWert ?? e.MaxWert, -1e9, 1e9, 100),
+    sollwert: klemme(e.sollwert ?? e.Sollwert, -1e9, 1e9, 40),
+    hysterese: klemme(e.hysterese ?? e.Hysterese, 0, 1e9, 2),
+    schreibWert: kurz(e.schreibWert ?? e.SchreibWert ?? "True", 40),
+    zielSeite: kurz(e.zielSeite ?? e.ZielSeite ?? "", 60)
   };
 }
 
 // ===================== Schnittstelle zur SPS =====================
 
-/** fetch mit Zeitgrenze – eine nicht erreichbare Brücke soll nicht hängen. */
+/** fetch mit Zeitgrenze – eine nicht erreichbare Brücke soll nicht hängen.
+    Hängt das Sitzungs-Token an, falls vorhanden (nur die von der Brücke
+    gelieferte Seite hat eines). */
 async function holen(pfad, einstellungen = {}, msGrenze = 3000) {
   const abbruch = new AbortController();
   const uhr = setTimeout(() => abbruch.abort(), msGrenze);
+  const kopf = { ...(einstellungen.headers || {}) };
+  if (TOKEN) kopf["X-SpsBruecke-Token"] = TOKEN;
   try {
-    return await fetch(BRUECKE + pfad, { ...einstellungen, signal: abbruch.signal });
+    return await fetch(BRUECKE + pfad, { ...einstellungen, headers: kopf, signal: abbruch.signal });
   } finally {
     clearTimeout(uhr);
   }
 }
 
+/** Wie holen(), prüft aber die Antwort und liefert das JSON. Eine nicht
+    erfolgreiche oder nicht-JSON-Antwort wird nicht blind weiterverarbeitet. */
+async function holenJson(pfad, einstellungen = {}, msGrenze = 3000) {
+  const r = await holen(pfad, einstellungen, msGrenze);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const typ = r.headers.get("content-type") || "";
+  if (!typ.toLowerCase().includes("json")) throw new Error("Keine JSON-Antwort");
+  return r.json();
+}
+
+const alsJsonKopf = koerper => ({
+  method: "POST", headers: { "Content-Type": "application/json" }, body: koerper
+});
+
 const api = {
   async status() {
     if (IST_APP) return JSON.parse(SpsNativ.status());
-    return (await holen("/api/status")).json();
+    return holenJson("/api/status");
   },
   /** Lebenszeichen der Oberfläche; liefert denselben Stand wie status(). */
   async lebenszeichen(an) {
-    return (await holen("/api/lebenszeichen", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ an: an, sekunden: WACHHUND_SEKUNDEN })
-    })).json();
+    return holenJson("/api/lebenszeichen",
+      alsJsonKopf(JSON.stringify({ an: an, sekunden: WACHHUND_SEKUNDEN })));
   },
   async beenden() {
-    return (await holen("/api/beenden", { method: "POST" }, 4000)).json();
+    return holenJson("/api/beenden", { method: "POST" }, 4000);
   },
   async verbinden(ip, rack, slot) {
     if (IST_APP) return JSON.parse(SpsNativ.verbinden(ip, rack, slot));
-    return (await fetch(BRUECKE + "/api/verbinden", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ip, rack, slot })
-    })).json();
+    return holenJson("/api/verbinden", alsJsonKopf(JSON.stringify({ ip, rack, slot })), 6000);
   },
   async trennen() {
     if (IST_APP) return JSON.parse(SpsNativ.trennen());
-    return (await fetch(BRUECKE + "/api/trennen", { method: "POST" })).json();
+    return holenJson("/api/trennen", { method: "POST" }, 5000);
   },
   async lesen(tags) {
     if (IST_APP) return JSON.parse(SpsNativ.lesen(JSON.stringify(tags)));
-    return (await fetch(BRUECKE + "/api/lesen", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tags)
-    })).json();
+    return holenJson("/api/lesen", alsJsonKopf(JSON.stringify(tags)), 6000);
   },
   async schreiben(tag, wert) {
     if (IST_APP) return JSON.parse(SpsNativ.schreiben(JSON.stringify(tag), String(wert)));
-    return (await fetch(BRUECKE + "/api/schreiben", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tag, wert: String(wert) })
-    })).json();
+    return holenJson("/api/schreiben",
+      alsJsonKopf(JSON.stringify({ tag, wert: String(wert) })), 6000);
   },
   async projektLaden() {
     if (IST_APP) return JSON.parse(SpsNativ.projektLaden());
-    return (await holen("/api/projekt")).json();
+    return holenJson("/api/projekt");
   },
   async projektSpeichern(p) {
     if (IST_APP) return JSON.parse(SpsNativ.projektSpeichern(JSON.stringify(p)));
-    return (await holen("/api/projekt", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(p)
-    }, 6000)).json();
+    return holenJson("/api/projekt", alsJsonKopf(JSON.stringify(p)), 6000);
   }
 };
 
@@ -569,18 +663,25 @@ function brueckeAnzeigeAktualisieren() {
     ? "Die Brücke läuft"
     : "Die Brücke läuft nicht";
 
+  // Hier fließen Werte aus der Brückenantwort ein (Adresse, Fassung). Sie
+  // werden bewusst als Text gesetzt, nie als HTML – so kann eine untergeschobene
+  // Antwort kein Skript einschleusen.
+  const daten = $("brueckeDaten");
+  daten.textContent = "";
+  const code = document.createElement("code");
+  code.textContent = BRUECKE;
   if (brueckeDa && brueckeStand) {
     const s = brueckeStand;
     const lauf = Math.round((s.laufzeitSekunden || 0) / 60);
     const w = s.wachhund || {};
-    $("brueckeDaten").innerHTML =
-      "Adresse <code>" + BRUECKE + "</code> &middot; Fassung " + (s.version || "?") +
-      " &middot; seit " + (lauf < 1 ? "weniger als einer Minute" : lauf + " Minuten") +
-      " &middot; Steuerung " + (s.verbunden ? "verbunden" : "nicht verbunden") +
-      (w.scharf ? " &middot; endet mit dieser Seite" : "");
+    const fassung = String(s.version ?? "?").slice(0, 32);
+    daten.append("Adresse ", code,
+      " · Fassung " + fassung +
+      " · seit " + (lauf < 1 ? "weniger als einer Minute" : lauf + " Minuten") +
+      " · Steuerung " + (s.verbunden ? "verbunden" : "nicht verbunden") +
+      (w.scharf ? " · endet mit dieser Seite" : ""));
   } else {
-    $("brueckeDaten").innerHTML =
-      "Unter <code>" + BRUECKE + "</code> meldet sich nichts.";
+    daten.append("Unter ", code, " meldet sich nichts.");
   }
 
   const lokal = brueckeIstLokal();
@@ -608,7 +709,7 @@ function brueckeAnzeigeAktualisieren() {
             "<code>SPS Monitor starten.bat</code> doppelklicken, oder hier die " +
             "richtige Adresse eintragen.";
   }
-  $("brueckeHilfe").innerHTML = hilfe;
+  htmlSetzen($("brueckeHilfe"), hilfe);
 }
 
 /** Holt den Stand und schickt dabei gleich das Lebenszeichen mit. */
@@ -784,11 +885,15 @@ $("projektDatei").onchange = ev => {
 };
 
 function allesNeuAufbauen() {
-  tagsTabelleAufbauen();
-  seitenLeisteAufbauen();
-  leinwandZeichnen();
-  kurvenlisteAufbauen();
-  diagrammZeichnen();
+  // Jeder Teil für sich abgesichert: ein fehlerhaftes Element darf nicht den
+  // ganzen Aufbau abbrechen und damit die Oberfläche unbrauchbar machen.
+  const teile = [tagsTabelleAufbauen, seitenLeisteAufbauen, leinwandZeichnen,
+                 kurvenlisteAufbauen, diagrammZeichnen];
+  let fehler = false;
+  for (const teil of teile) {
+    try { teil(); } catch (e) { fehler = true; }
+  }
+  if (fehler) melde("Teile des Projekts ließen sich nicht darstellen – bitte prüfen.");
 }
 
 // ===================== Verbindung =====================
@@ -819,10 +924,17 @@ $("verbindenBtn").onclick = async () => {
   }
 };
 
+let liestGerade = false;
 async function alleLesen() {
   if (!verbunden) { melde("Erst verbinden."); return; }
+  // Wiedereintritt verhindern: ein noch laufender Lesevorgang (z. B. bei
+  // langsamer Brücke) soll sich nicht mit dem nächsten überlagern.
+  if (liestGerade) return;
+  liestGerade = true;
   try {
-    const ergebnisse = await api.lesen(projekt.tags);
+    // Reine Anzeigekurven (ohne SPS-Adresse) werden nicht aus der SPS gelesen.
+    const echteTags = projekt.tags.filter(t => t.db !== null && t.db !== undefined);
+    const ergebnisse = echteTags.length ? await api.lesen(echteTags) : [];
     let fehler = null;
     ergebnisse.forEach(e => {
       if (e.fehler) { if (!fehler) fehler = e.name + ": " + e.fehler; }
@@ -831,7 +943,7 @@ async function alleLesen() {
     melde(fehler || "");
 
     if ($("aufzeichnung").checked) {
-      const punkt = { t: Date.now(), w: {} };
+      const punkt = { t: Date.now(), w: Object.create(null) };
       Object.entries(werte).forEach(([n, w]) => {
         const z = symbolAlsZahl(w);
         if (z !== null) punkt.w[n] = z;
@@ -848,17 +960,38 @@ async function alleLesen() {
     diagrammZeichnen();
   } catch (e) {
     melde("Lesen fehlgeschlagen: " + e.message);
+  } finally {
+    liestGerade = false;
   }
 }
 
 async function tagSchreiben(tag, neuerWert, woher) {
   if (!verbunden) { melde("Erst verbinden."); return; }
-  if (!confirm(woher + "\n\n'" + neuerWert + "' auf '" + tag.name +
-               "' (DB" + tag.db + ", Offset " + tag.offset + ") schreiben?\n" +
-               "Das wirkt sofort auf die laufende Anlage.")) return;
+  if (!tag || tag.db === null || tag.db === undefined) {
+    melde("Dieser Wert hat keine SPS-Adresse und kann nicht geschrieben werden.");
+    return;
+  }
+
+  // Rückfrage mit der TECHNISCHEN Zieladresse zuerst und deutlich: Name und
+  // Beschriftung stammen aus der Projektdatei und könnten in die Irre führen;
+  // DB/Offset/Bit sind das, was wirklich geschrieben wird. Alle eingesetzten
+  // Texte werden gekürzt und von Zeilenumbrüchen befreit, damit niemand den
+  // Warnhinweis aus dem Dialog schieben kann.
+  const k = t => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const adresse = "DB" + tag.db + ".DB" +
+    (tag.typ === "Bool" ? "X" + tag.offset + "." + tag.bit
+                        : (tag.typ === "Byte" ? "B" : tag.typ === "Int" ? "W"
+                           : tag.typ === "Real" ? "D" : "D") + tag.offset);
+  if (!confirm(
+      "In die Steuerung schreiben:\n\n" +
+      "  " + adresse + "  (" + k(tag.typ) + ")\n" +
+      "  neuer Wert: " + k(neuerWert) + "\n\n" +
+      "Name: " + k(tag.name) + "\n" +
+      "Auslöser: " + k(woher) + "\n\n" +
+      "Das wirkt sofort auf die laufende Anlage. Fortfahren?")) return;
   try {
     const d = await api.schreiben(tag, neuerWert);
-    melde(d.ok ? "Geschrieben: " + tag.name + " = " + neuerWert : "Fehler: " + d.fehler);
+    melde(d.ok ? "Geschrieben: " + adresse + " = " + k(neuerWert) : "Fehler: " + d.fehler);
     if (d.ok) alleLesen();
   } catch (e) {
     melde("Schreiben fehlgeschlagen: " + e.message);
@@ -890,7 +1023,7 @@ document.querySelectorAll(".tab").forEach(k => {
 
 function tagsTabelleAufbauen() {
   const koerper = $("tagsTabelle").querySelector("tbody");
-  koerper.innerHTML = "";
+  koerper.replaceChildren();
 
   projekt.tags.forEach((tag, index) => {
     const zeile = document.createElement("tr");
@@ -932,17 +1065,24 @@ function tagsTabelleAufbauen() {
     zeile.appendChild(tdWert);
 
     const tdS = document.createElement("td");
-    const eingabe = document.createElement("input");
-    eingabe.placeholder = "neuer Wert";
-    eingabe.style.width = "58%";
-    const knopf = document.createElement("button");
-    knopf.textContent = "→";
-    knopf.title = "Schreiben";
-    knopf.onclick = () => {
-      if (!eingabe.value) { melde("Kein Wert eingetragen."); return; }
-      tagSchreiben(tag, eingabe.value, "Tabelle");
-    };
-    tdS.appendChild(eingabe); tdS.appendChild(knopf);
+    if (tag.db === null || tag.db === undefined) {
+      // Reine Anzeigekurve (z. B. aus einer CSV) – keine SPS-Adresse, also
+      // auch kein Schreibfeld.
+      tdS.className = "hinweis";
+      tdS.textContent = "nur Anzeige";
+    } else {
+      const eingabe = document.createElement("input");
+      eingabe.placeholder = "neuer Wert";
+      eingabe.style.width = "58%";
+      const knopf = document.createElement("button");
+      knopf.textContent = "→";
+      knopf.title = "Schreiben";
+      knopf.onclick = () => {
+        if (!eingabe.value) { melde("Kein Wert eingetragen."); return; }
+        tagSchreiben(tag, eingabe.value, "Tabelle");
+      };
+      tdS.appendChild(eingabe); tdS.appendChild(knopf);
+    }
     zeile.appendChild(tdS);
 
     const tdW = document.createElement("td");
@@ -976,7 +1116,7 @@ $("tagHinzu").onclick = () => {
 
 function seitenLeisteAufbauen() {
   const leiste = $("seitenLeiste");
-  leiste.innerHTML = "<strong style='margin-right:4px'>Seite:</strong>";
+  htmlSetzen(leiste, "<strong style='margin-right:4px'>Seite:</strong>");
   projekt.seiten.forEach((s, i) => {
     const k = document.createElement("button");
     k.textContent = s.name;
@@ -1011,7 +1151,7 @@ function leinwandZeichnen() {
   const randOben = Math.max(0, (flaecheH - LEINWAND_H * skala) / 2);
   inhalt.style.width = flaecheB + "px";
   inhalt.style.height = flaecheH + "px";
-  inhalt.innerHTML = "";
+  inhalt.replaceChildren();
   if (!seite) return;
 
   seite.elemente.forEach(el => {
@@ -1253,7 +1393,7 @@ function dialogAufbauen() {
   })[el.typ] || "Seitenwechsel einstellen";
 
   const inhalt = $("dialogInhalt");
-  inhalt.innerHTML = "";
+  inhalt.replaceChildren();
 
   const feld = (beschriftung, bau) => {
     const d = document.createElement("div");
@@ -1356,7 +1496,7 @@ function dialogAufbauen() {
   if (el.typ === "Variable" || istMess) {
     const d = document.createElement("div");
     d.className = "feld";
-    d.innerHTML = "<label>Einheit und Nachkommastellen</label>";
+    htmlSetzen(d, "<label>Einheit und Nachkommastellen</label>");
     const paar = document.createElement("div");
     paar.className = "paar";
     paar.appendChild(eingabe("einheit"));
@@ -1368,7 +1508,7 @@ function dialogAufbauen() {
   if (istMess) {
     const d = document.createElement("div");
     d.className = "feld";
-    d.innerHTML = "<label>Messbereich (Minimum / Maximum)</label>";
+    htmlSetzen(d, "<label>Messbereich (Minimum / Maximum)</label>");
     const paar = document.createElement("div");
     paar.className = "paar";
     paar.appendChild(eingabe("minWert", "number"));
@@ -1380,7 +1520,7 @@ function dialogAufbauen() {
   if (istRegler) {
     const d = document.createElement("div");
     d.className = "feld";
-    d.innerHTML = "<label>Sollwert und Hysterese</label>";
+    htmlSetzen(d, "<label>Sollwert und Hysterese</label>");
     const paar = document.createElement("div");
     paar.className = "paar";
     paar.appendChild(eingabe("sollwert", "number"));
@@ -1419,7 +1559,7 @@ function dialogAufbauen() {
 
   const groesse = document.createElement("div");
   groesse.className = "feld";
-  groesse.innerHTML = "<label>Größe auf der Seite (Breite / Höhe)</label>";
+  htmlSetzen(groesse, "<label>Größe auf der Seite (Breite / Höhe)</label>");
   const paarG = document.createElement("div");
   paarG.className = "paar";
   paarG.appendChild(eingabe("breite", "number"));
@@ -1436,12 +1576,12 @@ function dialogAufbauen() {
 
 // ===================== Auswertung =====================
 
-let kurvenAuswahl = {};
+let kurvenAuswahl = Object.create(null);
 
 function kurvenlisteAufbauen() {
   const liste = $("kurvenliste");
   const vorhanden = new Set(projekt.tags.map(t => t.name));
-  liste.innerHTML = "";
+  liste.replaceChildren();
   projekt.tags.forEach((tag, i) => {
     if (!(tag.name in kurvenAuswahl)) kurvenAuswahl[tag.name] = i < 3;
     const l = document.createElement("label");
@@ -1580,18 +1720,29 @@ $("csvDatei").onchange = ev => {
   const datei = ev.target.files[0];
   ev.target.value = "";
   if (!datei) return;
+  // Große Dateien begrenzen, bevor überhaupt gelesen wird.
+  if (datei.size > 16 * 1024 * 1024) {
+    melde("Die CSV-Datei ist zu groß (über 16 MB).");
+    return;
+  }
+  // Eine laufende Aufzeichnung nicht ohne Rückfrage verwerfen.
+  if (verlauf.length > 0 &&
+      !confirm("Die aktuelle Aufzeichnung (" + verlauf.length +
+               " Punkte) wird durch die CSV-Datei ersetzt. Fortfahren?")) return;
+
   const leser = new FileReader();
   leser.onload = () => {
     try {
       const zeilen = String(leser.result).replace(/^﻿/, "").split(/\r?\n/).filter(z => z.trim());
       if (zeilen.length < 2) { melde("Die Datei enthält keine Datenzeilen."); return; }
-      const spalten = zeilen[0].split(";").map(s => s.trim()).slice(1);
+      // Mengen begrenzen: höchstens 200 Spalten und 20000 Zeilen.
+      const spalten = zeilen[0].split(";").map(s => s.trim()).slice(1, 201);
       const neu = [];
-      for (let i = 1; i < zeilen.length; i++) {
+      for (let i = 1; i < zeilen.length && neu.length < 20000; i++) {
         const f = zeilen[i].split(";");
         const t = zeitAusText(f[0]);
         if (!t) continue;
-        const punkt = { t, w: {} };
+        const punkt = { t, w: Object.create(null) };
         spalten.forEach((name, j) => {
           const roh = (f[j + 1] || "").trim().replace(",", ".");
           if (roh === "") return;
@@ -1602,10 +1753,13 @@ $("csvDatei").onchange = ev => {
       }
       if (!neu.length) { melde("Aus der Datei ließen sich keine Messwerte lesen."); return; }
       verlauf = neu;
+      // Spalten aus einer CSV sind reine Anzeigekurven ohne SPS-Adresse. Sie
+      // werden mit db:null angelegt, damit für sie kein Schreibknopf erscheint.
       spalten.forEach((name, i) => {
-        if (!projekt.tags.some(t => t.name === name))
-          projekt.tags.push({ name, db: 0, offset: 0, bit: 0, typ: "Real" });
-        if (!(name in kurvenAuswahl)) kurvenAuswahl[name] = i < 3;
+        const kurz_ = name.slice(0, 60);
+        if (!projekt.tags.some(t => t.name === kurz_))
+          projekt.tags.push({ name: kurz_, db: null, offset: 0, bit: 0, typ: "Real", nurAnzeige: true });
+        if (!(kurz_ in kurvenAuswahl)) kurvenAuswahl[kurz_] = i < 3;
       });
       tagsTabelleAufbauen(); kurvenlisteAufbauen();
       $("zeitraum").value = "0";
@@ -1651,7 +1805,7 @@ window.addEventListener("resize", () => {
 // ===================== Start =====================
 
 $("erneutVerbinden").onclick = async () => {
-  brueckeSetzen($("brueckeAdresse").value);
+  if (!brueckeSetzen($("brueckeAdresse").value)) return;
   melde("Verbindung zur Brücke wird gesucht …");
   await brueckePruefen();
   if (brueckeDa) {

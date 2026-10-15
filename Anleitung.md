@@ -238,10 +238,10 @@ Oben rechts lässt sich die Ansicht zwischen *Automatisch*, *Handy* und
 
 ---
 
-## 8. Sicherheitshinweis
+## 8. Sicherheit
 
 Sobald die Oberfläche im Netz erreichbar ist, kann **jeder im selben Netz**
-die Anlage bedienen – es gibt keine Anmeldung. Das sollte mit der IT
+die Anlage bedienen – es gibt bewusst keine Anmeldung. Das sollte mit der IT
 abgestimmt sein. Wer das nicht möchte, benutzt ausschließlich
 `http://localhost:8080` auf dem Rechner selbst und lehnt die
 Firewall-Freigabe beim ersten Start ab.
@@ -250,6 +250,25 @@ Das gilt auch fürs Beenden: Wer die Oberfläche erreicht, kann die Brücke auch
 abschalten. Das automatische Mitbeenden dagegen greift ausschließlich vom
 eigenen Rechner aus – ein Handy, das die Seite schließt, nimmt die Brücke
 nicht mit.
+
+**Was das Programm selbst absichert** (geprüft, siehe
+`Sicherheitspruefung_SPS_Monitor_2026-10-15.pdf`):
+
+- Die Brücke vergibt bei jedem Start ein **Sitzungs-Token** und setzt es nur in
+  ihre eigene Oberfläche ein. Schreibende Zugriffe verlangen dieses Token.
+  Dadurch kann **keine fremde Webseite** im selben Browser und keine lose per
+  Doppelklick geöffnete Datei ungefragt in die Steuerung schreiben.
+- Die Oberfläche hat eine strenge **Inhaltssicherheits-Richtlinie (CSP)** mit
+  Trusted Types; eingeschleustes Skript wird vom Browser blockiert.
+- Geladene Projekte werden auf gültige Werte und Mengen geprüft, bevor sie
+  wirken. Vor jedem Schreiben steht eine Rückfrage mit der **technischen
+  Zieladresse** (z. B. `DB14.DBX212.3`).
+
+Die Oberfläche spricht aus Sicherheitsgründen nur mit einer Brücke auf
+**demselben Rechner** (`localhost`). Eine Brücke auf einem anderen Rechner
+wird erreicht, indem man deren Oberfläche direkt öffnet
+(`http://<deren-IP>:8080`) – nicht, indem man die fremde Adresse im
+Offline-Kasten einträgt.
 
 ---
 

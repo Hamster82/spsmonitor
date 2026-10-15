@@ -14,9 +14,25 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Lieferketten-Absicherung der NuGet-Pakete:
+         - RestorePackagesWithLockFile schreibt packages.lock.json mit den exakt
+           aufgelösten Versionen und Prüfsummen; spätere Builds bauen darauf auf.
+         - NuGetAudit meldet beim Wiederherstellen bekannte Schwachstellen in den
+           verwendeten Paketen (auch mittelbaren). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Sharp7: reine C#-Portierung von Snap7 für die S7-Kommunikation.
+         Herausgeber: fede.barresi (github.com/fbarresi/Sharp7), Version fest auf
+         1.1.84. ACHTUNG: NICHT verwechseln mit dem Schadpaket "Sharp7Extend"
+         (Tippfehler-Fälschung, 2023/2024), das Schreibzugriffe auf S7-Steuerungen
+         heimlich scheitern lässt. Hier wird ausschließlich das echte "Sharp7"
+         in genau dieser Version eingebunden. -->
     <PackageReference Include="Sharp7" Version="1.1.84" />
   </ItemGroup>
 
