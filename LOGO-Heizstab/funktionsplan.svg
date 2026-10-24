@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="DejaVu Sans, Arial, sans-serif">
+<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#5a6673"/></marker></defs>
+<rect x="0" y="0" width="1180" height="760" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="24" y="30" font-size="17" text-anchor="start" fill="#17202b" font-weight="bold">PV-Überschuss-Heizstab – Funktionsplan (LOGO! 8.3)</text>
+<text x="24" y="50" font-size="11.5" text-anchor="start" fill="#5a6673" font-weight="normal">3 Stufen à 1 kW, einzeln geschaltet · Betrieb nur bei Netz-Einspeisung · bedien- und beobachtbar über die SPS-Monitor-App (S7 / VM = DB1)</text>
+<rect x="24" y="80" width="210" height="70" rx="6" fill="#fff7e8" stroke="#d9a441" stroke-width="1.5"/>
+<text x="129.0" y="98" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Kostal: Überschuss (W)</text>
+<text x="129.0" y="114" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">vorhandene Schnittstelle</text>
+<text x="129.0" y="128" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">im Programm (Analogwert)</text>
+<rect x="24" y="168" width="210" height="58" rx="6" fill="#eef4fb" stroke="#2f6fb0" stroke-width="1.5"/>
+<text x="129.0" y="186" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">I1  Freigabe Automatik</text>
+<text x="129.0" y="202" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Schalter am Schrank</text>
+<text x="129.0" y="216" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">(Automatik ohne App)</text>
+<rect x="24" y="244" width="210" height="96" rx="6" fill="#ecf6ee" stroke="#3b8f54" stroke-width="1.5"/>
+<text x="129.0" y="262" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">App-Merker (VM)</text>
+<text x="129.0" y="278" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">M1  Automatik-Freigabe</text>
+<text x="129.0" y="292" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">M2  Hand-Modus</text>
+<text x="129.0" y="306" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">M3/M4/M5  Hand Stufe 1/2/3</text>
+<rect x="280" y="80" width="210" height="72" rx="6" fill="#fff7e8" stroke="#d9a441" stroke-width="1.5"/>
+<text x="385.0" y="98" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Analogverstärker</text>
+<text x="385.0" y="114" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Vorzeichen / Skalierung</text>
+<text x="385.0" y="128" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">→ AM1 (Überschuss, W)</text>
+<rect x="280" y="172" width="210" height="60" rx="6" fill="#eef4fb" stroke="#2f6fb0" stroke-width="1.5"/>
+<text x="385.0" y="190" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Schwellwertschalter</text>
+<text x="385.0" y="206" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">ab +1200 W  →  „genug“</text>
+<rect x="280" y="250" width="210" height="74" rx="6" fill="#eef4fb" stroke="#2f6fb0" stroke-width="1.5"/>
+<text x="385.0" y="268" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Schwellwertschalter + NOT</text>
+<text x="385.0" y="284" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">unter −300 W = Import</text>
+<text x="385.0" y="298" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">30 s bestätigt →  „Import“</text>
+<rect x="280" y="344" width="210" height="70" rx="6" fill="#ecf6ee" stroke="#3b8f54" stroke-width="1.5"/>
+<text x="385.0" y="362" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Betriebsart (Verknüpfung)</text>
+<text x="385.0" y="378" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Auto = (M1 ∨ I1) ∧ ¬M2</text>
+<text x="385.0" y="392" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Hand = M2</text>
+<text x="681.0" y="74" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Stufen-Sequenzer  (Reihenfolge 1 → 2 → 3)</text>
+<rect x="556" y="92" width="250" height="86" rx="6" fill="#f3f0fb" stroke="#7a5bb0" stroke-width="1.5"/>
+<text x="681.0" y="110" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Stufe 1</text>
+<text x="681.0" y="126" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Setzen: Auto ∧ — ∧ genug</text>
+<text x="681.0" y="140" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">     → Einschaltverz. 60 s → S1</text>
+<text x="681.0" y="154" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Rücksetzen: Import ∨ ¬Auto</text>
+<text x="681.0" y="168" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">RS-Selbsthalterelais  →  S1</text>
+<rect x="556" y="196" width="250" height="86" rx="6" fill="#f3f0fb" stroke="#7a5bb0" stroke-width="1.5"/>
+<text x="681.0" y="214" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Stufe 2</text>
+<text x="681.0" y="230" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Setzen: Auto ∧ S1 ∧ genug</text>
+<text x="681.0" y="244" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">     → Einschaltverz. 60 s → S2</text>
+<text x="681.0" y="258" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Rücksetzen: Import ∨ ¬Auto ∨ ¬S1</text>
+<text x="681.0" y="272" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">RS-Selbsthalterelais  →  S2</text>
+<rect x="556" y="300" width="250" height="86" rx="6" fill="#f3f0fb" stroke="#7a5bb0" stroke-width="1.5"/>
+<text x="681.0" y="318" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Stufe 3</text>
+<text x="681.0" y="334" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Setzen: Auto ∧ S2 ∧ genug</text>
+<text x="681.0" y="348" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">     → Einschaltverz. 60 s → S3</text>
+<text x="681.0" y="362" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Rücksetzen: Import ∨ ¬Auto ∨ ¬S2</text>
+<text x="681.0" y="376" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">RS-Selbsthalterelais  →  S3</text>
+<line x1="798" y1="178" x2="798" y2="196" stroke="#7a5bb0" stroke-width="1.4"/>
+<line x1="798" y1="282" x2="798" y2="300" stroke="#7a5bb0" stroke-width="1.4"/>
+<text x="990" y="74" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Ausgänge (Relais)</text>
+<rect x="840" y="100" width="300" height="66" rx="6" fill="#fde9e7" stroke="#c0453c" stroke-width="1.5"/>
+<text x="990.0" y="118" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Q1  →  Schütz Stufe 1 (1 kW)</text>
+<text x="990.0" y="134" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Q1 = (Auto ∧ S1)  ∨  (Hand ∧ M3)</text>
+<rect x="840" y="196" width="300" height="66" rx="6" fill="#fde9e7" stroke="#c0453c" stroke-width="1.5"/>
+<text x="990.0" y="214" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Q2  →  Schütz Stufe 2 (1 kW)</text>
+<text x="990.0" y="230" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Q2 = (Auto ∧ S2)  ∨  (Hand ∧ M4)</text>
+<rect x="840" y="292" width="300" height="66" rx="6" fill="#fde9e7" stroke="#c0453c" stroke-width="1.5"/>
+<text x="990.0" y="310" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Q3  →  Schütz Stufe 3 (1 kW)</text>
+<text x="990.0" y="326" font-size="11" text-anchor="middle" fill="#2a3744" font-weight="normal">Q3 = (Auto ∧ S3)  ∨  (Hand ∧ M5)</text>
+<line x1="234" y1="116" x2="280" y2="116" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="385" y1="152" x2="385" y2="172" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="258" y1="202" x2="280" y2="202" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="258" y1="116" x2="258" y2="287" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="258" y1="202" x2="280" y2="202" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="258" y1="287" x2="280" y2="287" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="385" y1="152" x2="258" y2="152" stroke="#5a6673" stroke-width="1.6"/>
+<line x1="234" y1="197" x2="268" y2="197" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="268" y1="197" x2="268" y2="372" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="268" y1="372" x2="280" y2="372" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="234" y1="292" x2="268" y2="292" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="490" y1="202" x2="520" y2="202" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="490" y1="287" x2="520" y2="287" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="490" y1="372" x2="520" y2="372" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="520" y1="202" x2="520" y2="372" stroke="#5a6673" stroke-width="1.6"/>
+<line x1="520" y1="210" x2="556" y2="210" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="520" y1="300" x2="556" y2="300" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="806" y1="135" x2="840" y2="133" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="806" y1="239" x2="840" y2="229" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="806" y1="343" x2="840" y2="325" stroke="#5a6673" stroke-width="1.6" marker-end="url(#arr)"/>
+<text x="528" y="200" font-size="9.5" text-anchor="start" fill="#7a8795" font-weight="normal">genug / Import / Auto</text>
+<rect x="556" y="440" width="584" height="150" rx="6" fill="#f2f7fc" stroke="#2f6fb0" stroke-width="1.5"/>
+<text x="848" y="462" font-size="12.5" text-anchor="middle" fill="#17202b" font-weight="bold">Anbindung SPS-Monitor-App  (LOGO! als S7-Server · VM = DB1)</text>
+<text x="574" y="486" font-size="11.5" text-anchor="start" fill="#2a3744" font-weight="bold">App schreibt:</text>
+<text x="574" y="504" font-size="11" text-anchor="start" fill="#17202b" font-weight="normal" font-family="DejaVu Sans Mono">DB1.DBX0.0 M1 Automatik   ·   DB1.DBX0.1 M2 Hand</text>
+<text x="574" y="520" font-size="11" text-anchor="start" fill="#17202b" font-weight="normal" font-family="DejaVu Sans Mono">DB1.DBX0.2…0.4  M3/M4/M5 Hand-Stufen</text>
+<text x="574" y="540" font-size="11.5" text-anchor="start" fill="#2a3744" font-weight="bold">App liest:</text>
+<text x="574" y="558" font-size="11" text-anchor="start" fill="#17202b" font-weight="normal" font-family="DejaVu Sans Mono">DB1.DBX1.0…1.2 Q1/Q2/Q3   ·   DB1.DBX1.3 Auto  ·  1.4 Hand</text>
+<text x="574" y="574" font-size="11" text-anchor="start" fill="#17202b" font-weight="normal" font-family="DejaVu Sans Mono">DB1.DBW2 Überschuss(W)  ·  DBW4 Ein-Schwelle  ·  DBW6 Aus-Schwelle</text>
+<rect x="24" y="440" width="500" height="150" rx="6" fill="#fafbfc" stroke="#c9d2dc" stroke-width="1.5"/>
+<text x="34" y="462" font-size="12.5" text-anchor="start" fill="#17202b" font-weight="bold">So wirkt die Logik (kurz)</text>
+<text x="34" y="482" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">• „Überschuss“ = Einspeisung ins Netz (nach Hausverbrauch und Batterie).</text>
+<text x="34" y="500" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">• Steigt der Überschuss über 1200 W, schaltet nach 60 s die nächste Stufe zu —</text>
+<text x="34" y="518" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">   eine nach der anderen, weil jede Stufe den Überschuss um ~1 kW senkt.</text>
+<text x="34" y="536" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">• Wird Strom aus dem Netz bezogen (≤ −300 W, 30 s), schalten die Stufen ab.</text>
+<text x="34" y="554" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">• Alle Schwellen/Zeiten sind einstellbar; die App kann sie ändern.</text>
+<text x="34" y="572" font-size="11" text-anchor="start" fill="#2a3744" font-weight="normal">• Hand-Modus (M2): Stufen folgen direkt M3/M4/M5, unabhängig vom Überschuss.</text>
+<text x="24" y="744" font-size="10.5" text-anchor="start" fill="#7a8795" font-weight="normal">Hinweis: Blocknamen entsprechen LOGO!Soft-Comfort-Blöcken. Die genaue Verdrahtung steht in der Block-Tabelle des Begleitdokuments.</text>
+</svg>
