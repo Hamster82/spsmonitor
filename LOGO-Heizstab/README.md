@@ -79,9 +79,12 @@ liest aber **Länge 1** (nur 1 Register / 16 Bit), teils am **ungeraden** Regist
 | PV-Erzeugung | HR1067, Länge 1 | **HR1066, Länge 2, REAL** |
 | Hausverbrauch gesamt | HR173, Länge 1 | **HR172, Länge 2, REAL** |
 | Batterie-SOC | HR211, Länge 1 | **HR210, Länge 2, REAL** |
-| Batterie-Leistung | HR583, Länge 1 | **HR582, Länge 2, REAL** |
+| Batterie-Leistung | HR583, Länge 1 | **Reg. 582, Länge 1, S16 (Int, kein Float!)** |
 | Hausverbrauch Batterie | HR107, Länge 1 | **HR106, Länge 2, REAL** |
-| Gesamtverbrauch | HR576, Länge 1 | **HR576, Länge 2, REAL** |
+| **Netzleistung (empfohlen als Überschuss)** | – | **Reg. 252, Länge 2, Float; +Bezug/−Einsp.; Überschuss = −Wert (Gain −1)** |
+
+Registernummern/Typen aus der KOSTAL-Protokollbeschreibung (MODBUS-TCP & SunSpec). **Float-Wortreihenfolge:
+standardmäßig little-endian (CDAB), Register 0x05 – am LOGO!-Float-Konverter passend einstellen.**
 
 → So landet nur die **halbe** Zahl in der LOGO! – alle Analogwerte, der Überschuss und damit
 die Stufenschaltung sind Unsinn. **Fix:** je Wert **Länge 2** ab dem **geraden** Basisregister
