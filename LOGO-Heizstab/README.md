@@ -61,3 +61,58 @@ Rack/Slot nicht durch, braucht sie einen kleinen **„LOGO!-Modus“ (TSAP)** �
 1. **Überschuss kalibrieren:** in der App `DB1.DBW2` beobachten – bei Einspeisung **positiv, in Watt**. Sonst B1-Verstärkung
    (Vorzeichen/Maßstab) anpassen. *(Das ist die häufigste Ursache, warum solche Programme „nicht funktionieren“.)*
 2. **Hand-Test** (M2 + M3/M4/M5), dann **Automatik-Test** (I1/M1, künstlich Last erzeugen → Stufen müssen abschalten).
+
+---
+
+## Anbindung an das BESTEHENDE Programm (Kostal per Modbus)
+
+Der Export (`Meyer_PV.pdf`) zeigt: Die LOGO! liest die Kostal (192.168.178.25, Modbus TCP,
+Port 1502, Unit 71) und rechnet den Überschuss als **PV − Hausverbrauch** (Block B001).
+
+### Warum es nicht funktioniert (Hauptursache)
+
+Die Kostal-Leistungswerte sind **32-Bit-Gleitkomma (REAL)** über **2 Register**. Das Programm
+liest aber **Länge 1** (nur 1 Register / 16 Bit), teils am **ungeraden** Register:
+
+| Wert | bisher | korrekt |
+|---|---|---|
+| PV-Erzeugung | HR1067, Länge 1 | **HR1066, Länge 2, REAL** |
+| Hausverbrauch gesamt | HR173, Länge 1 | **HR172, Länge 2, REAL** |
+| Batterie-SOC | HR211, Länge 1 | **HR210, Länge 2, REAL** |
+| Batterie-Leistung | HR583, Länge 1 | **HR582, Länge 2, REAL** |
+| Hausverbrauch Batterie | HR107, Länge 1 | **HR106, Länge 2, REAL** |
+| Gesamtverbrauch | HR576, Länge 1 | **HR576, Länge 2, REAL** |
+
+→ So landet nur die **halbe** Zahl in der LOGO! – alle Analogwerte, der Überschuss und damit
+die Stufenschaltung sind Unsinn. **Fix:** je Wert **Länge 2** ab dem **geraden** Basisregister
+lesen, in eine Doppelwort-VM legen und als **REAL** interpretieren (Byte-/Wortreihenfolge beachten).
+Exakte Registernummern/Typen in der Kostal-Modbus-Doku deiner Firmware gegenprüfen.
+Die vorhandenen Gleit/Ganz-Konverter (B003/B004/B005…) liefern danach korrekte Werte.
+
+## App-Datei `projekt.json`
+
+Fertiges Bedienbild für die SPS-Monitor-App: sechs Messwerte (PV, Hausverbrauch, Netzleistung,
+Batterie-Leistung, SOC, Überschuss), drei Stufen-Melder, Betriebsart (Automatik/Hand),
+Hand-Stufen und die einstellbare Ein-Schwelle. **Die Adressen sind in der App frei editierbar** –
+trage dort genau die VM-Adressen ein, die deine LOGO! bereitstellt.
+
+| Zweck | Wert | DB1-Adresse (App) | Typ | LOGO!-seitig |
+|---|---|---|---|---|
+| App → LOGO! | Automatik / Hand | `DBX200.0 / .1` | Bool | **neu anzulegen** (App-Steuerbits) |
+| App → LOGO! | Hand Stufe 1/2/3 | `DBX200.2 / .3 / .4` | Bool | **neu** |
+| LOGO! → App | Stufe 1/2/3 ein | `DBX201.0 / .1 / .2` | Bool | Q1/Q2/Q3 spiegeln |
+| LOGO! → App | Auto / Hand aktiv | `DBX201.3 / .4` | Bool | Status |
+| LOGO! → App | PV / Hausverbrauch | `DBW202 / DBW204` | Int (W) | aus B003 / B004 |
+| LOGO! → App | Netzleistung (optional) | `DBW206` | Int (W) | nur falls vorhanden |
+| LOGO! → App | Batterie-Leistung / SOC | `DBW208 / DBW210` | Int | aus B022 / B005 |
+| LOGO! → App | Überschuss | `DBW212` | Int (W) | aus B001 |
+| App ↔ LOGO! | Ein-Schwelle | `DBW50` | Int (W) | **schon vorhanden** (B010.On) |
+
+**Wichtig – Steuern erfordert LOGO!-Ergänzung:** Dein jetziges Programm hat keine App-Steuerbits.
+Zum Bedienen aus der App drei bis fünf Merker anlegen (Automatik/Hand/Hand-Stufen), per VM-Zuordnung
+auf `VB200` legen und in die Stufen-Logik einbinden (Auto: wie bisher; Hand: Stufen folgen den Bits).
+Bis dahin **zeigt** die App die Werte nur an.
+
+**Display der LOGO!:** Der vorhandene Meldetext (B002) zeigt bereits ÜS_W, PV_W, HV_W, Batt_%, Batt_Wh,
+Batt_W und die Stufen. Nach der Modbus-Korrektur stimmen diese Zahlen; sinnvoll ist, **Überschuss**,
+**PV**, **Hausverbrauch**, **SOC** und **Stufe 1/2/3** gut sichtbar zu lassen.
