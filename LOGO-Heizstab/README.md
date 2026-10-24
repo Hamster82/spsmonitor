@@ -64,33 +64,17 @@ Rack/Slot nicht durch, braucht sie einen kleinen **„LOGO!-Modus“ (TSAP)** �
 
 ---
 
-## Anbindung an das BESTEHENDE Programm (Kostal per Modbus)
+## Anbindung an das BESTEHENDE Programm
 
 Der Export (`Meyer_PV.pdf`) zeigt: Die LOGO! liest die Kostal (192.168.178.25, Modbus TCP,
-Port 1502, Unit 71) und rechnet den Überschuss als **PV − Hausverbrauch** (Block B001).
+Port 1502, Unit 71) und rechnet den Überschuss als **PV − Gesamtverbrauch** (Block B001).
 
-### Warum es nicht funktioniert (Hauptursache)
-
-Die Kostal-Leistungswerte sind **32-Bit-Gleitkomma (REAL)** über **2 Register**. Das Programm
-liest aber **Länge 1** (nur 1 Register / 16 Bit), teils am **ungeraden** Register:
-
-| Wert | bisher | korrekt |
-|---|---|---|
-| PV-Erzeugung | HR1067, Länge 1 | **HR1066, Länge 2, REAL** |
-| Hausverbrauch gesamt | HR173, Länge 1 | **HR172, Länge 2, REAL** |
-| Batterie-SOC | HR211, Länge 1 | **HR210, Länge 2, REAL** |
-| Batterie-Leistung | HR583, Länge 1 | **Reg. 582, Länge 1, S16 (Int, kein Float!)** |
-| Hausverbrauch Batterie | HR107, Länge 1 | **HR106, Länge 2, REAL** |
-| **Netzleistung (empfohlen als Überschuss)** | – | **Reg. 252, Länge 2, Float; +Bezug/−Einsp.; Überschuss = −Wert (Gain −1)** |
-
-Registernummern/Typen aus der KOSTAL-Protokollbeschreibung (MODBUS-TCP & SunSpec). **Float-Wortreihenfolge:
-standardmäßig little-endian (CDAB), Register 0x05 – am LOGO!-Float-Konverter passend einstellen.**
-
-→ So landet nur die **halbe** Zahl in der LOGO! – alle Analogwerte, der Überschuss und damit
-die Stufenschaltung sind Unsinn. **Fix:** je Wert **Länge 2** ab dem **geraden** Basisregister
-lesen, in eine Doppelwort-VM legen und als **REAL** interpretieren (Byte-/Wortreihenfolge beachten).
-Exakte Registernummern/Typen in der Kostal-Modbus-Doku deiner Firmware gegenprüfen.
-Die vorhandenen Gleit/Ganz-Konverter (B003/B004/B005…) liefern danach korrekte Werte.
+> **Korrektur / zurückgezogen:** Eine frühere Fassung dieser README empfahl, die Modbus-Register
+> (Länge 2 / gerade Register / REAL) zu ändern. **Das war falsch.** Die LOGO! adressiert
+> 1-basiert (Registernummer = Kostal-Doku-Adresse + 1); die Original-Lesung funktioniert und
+> wird **nicht** angefasst. Die aktuelle, korrigierte Anleitung ist
+> **`LOGO-Anleitung_Steuerung-App_2026-10-24.pdf`** – sie ändert nur die Schaltlogik und bindet
+> die App an, die Kostal-Seite bleibt unverändert.
 
 ## App-Datei `projekt.json`
 
